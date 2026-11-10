@@ -1,0 +1,14 @@
+{
+  "domain": "timeregistrering",
+  "name": "Timer og materialer",
+  "codeowners": ["@amigoogfutte"],
+  "config_flow": true,
+  "dependencies": ["http", "frontend"],
+  "documentation": "https://github.com/amigoogfutte/timer",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/amigoogfutte/timer/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

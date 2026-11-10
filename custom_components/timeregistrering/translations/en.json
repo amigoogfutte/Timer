@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Timer og materialer",
+        "description": "Gemmer dine noteringer af timer og materialer fra appen i Home Assistant. Appen findes i sidemenuen under Timer."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Timer og materialer er allerede sat op."
+    }
+  }
+}
