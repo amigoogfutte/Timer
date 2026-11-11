@@ -461,10 +461,18 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("vareListe").replaceChildren(...[...names].sort().map(n=>el("option",{value:n})));
   }
 
+  // Beskrivelsen vises først, når man trykker to gange hurtigt på sagen.
+  const visBesk=new Set();
+  function dobbeltTryk(node, s){
+    let sidst=0;
+    node.addEventListener("click",()=>{ const nu=Date.now(); if(nu-sidst<400){ sidst=0; if(!s.besk){ toast("Sagen har ingen beskrivelse"); return; } visBesk.has(s.id)? visBesk.delete(s.id) : visBesk.add(s.id); renderSager(); } else sidst=nu; });
+    return node;
+  }
   function renderSager(){
     const act=activeSager().filter(bfMatch), ark=sager().filter(s=>s.arkiveret && bfMatch(s)).sort((a,b)=>(b.oprettet||0)-(a.oprettet||0));
     const mk=(s,archived)=>el("div",{class:"item"},
-      el("div",{class:"txt"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.besk?el("span",{class:"muted",style:"white-space:pre-wrap"},s.besk):null),
+      dobbeltTryk(el("div",{class:"txt",style:"flex:1;cursor:pointer;user-select:none;-webkit-user-select:none"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse),
+        s.besk && visBesk.has(s.id) ? el("span",{class:"muted",style:"white-space:pre-wrap"},s.besk) : null), s),
       el("div",{class:"row",style:"flex:0 0 auto"},
         el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret"),
         archived
