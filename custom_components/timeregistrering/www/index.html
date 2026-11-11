@@ -26,7 +26,7 @@ h2{margin:0;font-size:16px;font-weight:600}
 .muted{color:var(--muted);font-size:14px}
 .card{background:var(--card);border-radius:16px;padding:16px;margin-top:12px;display:flex;flex-direction:column;gap:12px}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;color:var(--muted)}
-input[type=text],input[type=number],input[type=date],select,textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;font-size:16px}
+input[type=text],input[type=search],input[type=number],input[type=date],select,textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;font-size:16px}
 textarea{min-height:80px;resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .row > *{flex:1}
@@ -109,7 +109,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
 
       <div id="f-materiale" class="hidden">
-        <details id="fasteBox" class="hidden" style="margin-bottom:12px"><summary id="fasteBoxSum">Faste materialer</summary><div class="chips" id="fasteChips" style="padding-top:4px"></div></details>
+        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div></div>
         <label class="f">Vare<input type="text" id="vare" list="vareListe" placeholder="Fx Bortskaffelse af affald" autocomplete="off"></label>
         <datalist id="vareListe"></datalist>
         <div class="row" style="margin-top:12px">
@@ -471,17 +471,25 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function renderFaste(){
     const f=faste();
     $("fasteBox").classList.toggle("hidden", f.length===0);
-    $("fasteChips").replaceChildren(...f.map(m=>el("button",{type:"button",onclick:()=>{
-      $("vare").value=m.navn; $("enhed").value=m.enhed||"stk"; $("varenr").value=m.varenr||""; $("antal").value=String(m.antal||1).replace(".",",");
-      $("fasteBox").open=false; $("antal").focus(); $("antal").select && $("antal").select(); }}, m.navn)));
+    visFasteSoeg();
     $("fastSum").textContent="Oprettede materialer ("+f.length+")";
-    $("fasteBoxSum").textContent="Faste materialer ("+f.length+") – tryk for at vise";
     $("fastListe").replaceChildren(...(f.length? f.map(m=>el("div",{class:"item"},
       el("div",{class:"txt"}, el("span",{style:"font-weight:600"},m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")+(m.varenr?" · varenr. "+m.varenr:""))),
       el("div",{class:"row",style:"flex:0 0 auto"},
         el("button",{type:"button",class:"btn small",onclick:()=>startRetFast(m.id)},"Ret"),
         delBtn(()=>remove(m.id,"Fjernet"),"Fjern "+m.navn)))) : [el("div",{class:"empty"},"Ingen faste materialer endnu.")]));
   }
+  function visFasteSoeg(){
+    const q=$("fastSoeg").value.trim().toLowerCase();
+    const box=$("fasteChips");
+    if(!q){ box.replaceChildren(); return; }
+    const hits=faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+    box.replaceChildren(...(hits.length? hits.map(m=>el("button",{type:"button",class:"btn",style:"text-align:left;font-weight:500;display:flex;justify-content:space-between;gap:8px;align-items:center",onclick:()=>{
+      $("vare").value=m.navn; $("enhed").value=m.enhed||"stk"; $("varenr").value=m.varenr||""; $("antal").value=String(m.antal||1).replace(".",",");
+      $("fastSoeg").value=""; box.replaceChildren(); $("antal").focus(); $("antal").select && $("antal").select(); }},
+      el("span",null,m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")))) : [el("div",{class:"empty"},"Ingen faste materialer med \u201d"+$("fastSoeg").value.trim()+"\u201d.")]));
+  }
+  $("fastSoeg").addEventListener("input", visFasteSoeg);
   function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
