@@ -55,6 +55,18 @@ label.f{min-width:0}
 .item .txt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .item .txt span{overflow-wrap:anywhere;white-space:pre-wrap}
 .tag{font-size:12px;font-weight:600;color:var(--accent)}
+/* Farver pr. type, så timer, materialer og noter er nemme at skelne */
+.t-timer{--tbg:#E7F3EC;--tline:#C9E3D5;--tink:#17583F}
+.t-materiale{--tbg:#E8F0FA;--tline:#CADAF0;--tink:#1F4E85}
+.t-note{--tbg:#FBF3DE;--tline:#EEDDB0;--tink:#6E520C}
+.boks{background:var(--tbg);border:1px solid var(--tline);border-radius:12px;padding:10px 12px}
+.boks .tag,.boks .bokstitel{color:var(--tink)}
+.bokstitel{font-size:13px;font-weight:700;margin-bottom:4px}
+.list .item.boks{border-top:1px solid var(--tline);margin-bottom:6px}
+.formboks{background:var(--tbg);border:1px solid var(--tline);border-radius:14px;padding:12px}
+.seg button[data-type=timer][aria-pressed=true]{background:#E7F3EC;color:#17583F}
+.seg button[data-type=materiale][aria-pressed=true]{background:#E8F0FA;color:#1F4E85}
+.seg button[data-type=note][aria-pressed=true]{background:#FBF3DE;color:#6E520C}
 .empty{color:var(--muted);font-size:14px;padding:4px 0}
 .note{background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:12px 14px;font-size:14px}
 .sum{display:flex;justify-content:space-between;align-items:baseline}
@@ -119,7 +131,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <button type="button" data-type="note" aria-pressed="false">Note</button>
       </div>
 
-      <div id="f-timer">
+      <div id="f-timer" class="t-timer formboks">
         <div class="stepper">
           <button type="button" class="btn" id="tMinus" aria-label="Træk et kvarter fra">−</button>
           <div class="val"><label for="timer" class="sr">Timer</label><input id="timer" type="text" inputmode="decimal" value="1" autocomplete="off"><span class="muted" id="timerTxt">1 time</span></div>
@@ -135,7 +147,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <label class="f" style="margin-top:12px">Hvad lavede du? (valgfrit)<textarea id="timerTekst" placeholder="Fx monteret nye døre"></textarea></label>
       </div>
 
-      <div id="f-materiale" class="hidden">
+      <div id="f-materiale" class="hidden t-materiale formboks">
         <div id="fasteBox" class="hidden" style="margin-bottom:12px"><div id="pakkeBox" class="hidden" style="margin-bottom:12px"><div class="muted" style="margin-bottom:8px">Tilbehørslister</div><div class="chips" id="pakkeChips"></div></div><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div><div id="valgteBox" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"><div class="muted" id="valgteTxt"></div><div class="row"><button type="button" class="btn small" id="valgteRyd" style="flex:0 0 auto">Fravælg alle</button><button type="button" class="btn accent" id="valgteOk">OK</button></div></div><div class="muted" style="margin-top:10px">Eller skriv et materiale selv:</div></div>
         <label class="f">Vare<input type="text" id="vare" list="vareListe" placeholder="Fx Bortskaffelse af affald" autocomplete="off"></label>
         <datalist id="vareListe"></datalist>
@@ -146,7 +158,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <label class="f" style="margin-top:12px">Varenr. / følgeseddel (valgfrit)<input type="text" id="varenr" autocomplete="off"></label>
       </div>
 
-      <div id="f-note" class="hidden">
+      <div id="f-note" class="hidden t-note formboks">
         <label class="f">Note<textarea id="noteTekst" placeholder="Fx mangler en dør – bestilt hos Stark"></textarea></label>
       </div>
 
@@ -494,7 +506,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         el("span",{style:"flex:0 0 auto;font-weight:700"}, fmtNum(sagTimer)+" t")));
       const l=el("div",{class:"list"});
       for(const p of groups[sid]){
-        l.append(el("div",{class:"item"},
+        l.append(el("div",{class:"item boks t-"+p.type},
           p.type==="timer"
             ? el("div",{class:"txt"}, el("span",{class:"tag"},"Timer"), el("span",{style:"font-size:22px;font-weight:700;line-height:1.2"},fmtNum(p.timer)+" t"), p.tekst? el("span",{class:"muted"},p.tekst) : null)
             : el("div",{class:"txt"}, el("span",{class:"tag"},typeNavn[p.type]||""), el("span",null,postLine(p))),
@@ -559,9 +571,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       cb.addEventListener("change",()=>{ if(cb.checked) save(doneId,{kind:"done",dato,sagId:sid,oprettet:Date.now()},"Markeret som indtastet"); else remove(doneId,"Markering fjernet"); });
       cards.push(el("div",{class:"card",style:done?"opacity:.6":""},
         el("div",null, el("span",{class:"tag"}, s?("Sag "+s.nr):"Sag"), el("h2",null, s?s.adresse:"Ukendt sag")),
-        el("div",{class:"sum"}, el("span",{class:"muted"},"Timer"), el("span",{class:"big"},fmtNum(r.timer))),
-        matLines.length? el("div",null, el("div",{class:"muted"},"Materialer"), ...matLines.map(m=>el("div",null,m))) : el("div",{class:"muted"},"Ingen materialer"),
-        r.noter.length? el("div",null, el("div",{class:"muted"},"Noter"), ...r.noter.map(n=>el("div",null,n))) : null,
+        el("div",{class:"boks t-timer sum",style:"align-items:center"}, el("span",{class:"bokstitel",style:"margin:0"},"Timer"), el("span",{class:"big"},fmtNum(r.timer))),
+        el("div",{class:"boks t-materiale"}, el("div",{class:"bokstitel"},"Materialer"), ...(matLines.length? matLines.map(m=>el("div",null,m)) : [el("div",{class:"muted"},"Ingen materialer")])),
+        r.noter.length? el("div",{class:"boks t-note"}, el("div",{class:"bokstitel"},"Noter"), ...r.noter.map(n=>el("div",{style:"white-space:pre-wrap"},n))) : null,
         r.noter.length? el("details",{class:"hidden"}, el("summary",null,"Tekst"), pre) : null,
         el("div",{class:"row"},
           el("button",{type:"button",class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(txt); toast("Kopieret"); }catch(e){ pre.parentElement.classList.remove("hidden"); pre.parentElement.open=true; const rg=document.createRange(); rg.selectNodeContents(pre); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(rg); toast("Markeret – kopiér selv"); } }, ...(r.noter.length?{}:{disabled:""})},"Kopiér tekst"),
