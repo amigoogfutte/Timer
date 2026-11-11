@@ -27,8 +27,11 @@ h2{margin:0;font-size:16px;font-weight:600}
 .muted{color:var(--muted);font-size:14px}
 .card{background:var(--card);border-radius:16px;padding:16px;margin-top:12px;display:flex;flex-direction:column;gap:12px}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;color:var(--muted)}
-input[type=text],input[type=search],input[type=number],input[type=date],select,textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;font-size:16px}
+input[type=text],input[type=search],input[type=number],input[type=date],input[type=time],select,textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;font-size:16px}
 textarea{min-height:80px;resize:vertical}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;text-align:left;background:#fff;color:var(--ink)}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+label.f{min-width:0}
 .row{display:flex;gap:8px;align-items:center}
 .row > *{flex:1}
 .btn{min-height:48px;border-radius:12px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:15px;padding:0 14px;cursor:pointer}
@@ -153,7 +156,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="f">Boligforening – initialer (valgfrit)<input type="text" id="sagBf" list="bfListe" placeholder="Fx OB" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
       <datalist id="bfListe"></datalist>
       <label class="check" style="font-weight:600"><input type="checkbox" id="sagAftale"> Aftale</label>
-      <div class="row hidden" id="aftaleFelter">
+      <div class="hidden" id="aftaleFelter" style="display:flex;flex-direction:column;gap:12px">
         <label class="f">Dato<input type="date" id="aftaleDato"></label>
         <label class="f">Klokkeslæt<input type="time" id="aftaleTid" value="07:00"></label>
       </div>
