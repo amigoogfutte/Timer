@@ -239,16 +239,18 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function sagNavn(s){ return s ? ((s.bf? s.bf+" · ":"")+"Sag "+s.nr+" · "+s.adresse) : "Ukendt sag"; }
   // Filter på boligforening (initialer). "" = alle. Huskes på enheden.
   let bfFilter=""; try{ bfFilter=localStorage.getItem("tm_bf")||""; }catch(e){}
-  const bfMatch=s=>!bfFilter || (s.bf||"")===bfFilter;
+  const ANDRE="__andre";  // sager uden boligforening
+  const bfMatch=s=>!bfFilter || (bfFilter===ANDRE ? !s.bf : (s.bf||"")===bfFilter);
+  const bfNavn=b=>b===ANDRE? "andre" : b;
   function alleBf(){ return [...new Set(sager().map(s=>s.bf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da")); }
   function renderBf(){
     const liste=alleBf();
-    if(bfFilter && !liste.includes(bfFilter)) bfFilter="";
+    if(bfFilter && bfFilter!==ANDRE && !liste.includes(bfFilter)) bfFilter="";
     $("bfListe").replaceChildren(...liste.map(b=>el("option",{value:b})));
     document.querySelectorAll(".bfChips").forEach(box=>{
       box.classList.toggle("hidden", liste.length===0);
-      box.replaceChildren(...["",...liste].map(b=>{
-        const k=el("button",{type:"button","aria-pressed":b===bfFilter?"true":"false"}, b||"Alle");
+      box.replaceChildren(...["",...liste,ANDRE].map(b=>{
+        const k=el("button",{type:"button","aria-pressed":b===bfFilter?"true":"false"}, b===ANDRE? "Andre" : (b||"Alle"));
         k.addEventListener("click",()=>{ bfFilter=b; try{ localStorage.setItem("tm_bf",b); }catch(e){} renderAll(); });
         return k; }));
     });
@@ -409,7 +411,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(pendingSel && list.some(s=>s.id===pendingSel)){ sel.value=pendingSel; pendingSel=null; }
     else if(list.some(s=>s.id===prev)) sel.value=prev;
     $("ingenSager").classList.toggle("hidden", list.length>0);
-    if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,"")+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
+    if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening" : "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,""))+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
     $("gem").disabled = list.length===0;
   }
 
@@ -480,7 +482,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
           ? el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=false; save(s.id,d,"Sag genåbnet"); }},"Genåbn")
           : el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=true; save(s.id,d,"Sag afsluttet"); }},"Afslut"),
         archived ? delBtn(()=>remove(s.id,"Sag slettet"),"Slet sag "+s.nr) : null));
-    $("sagListe").replaceChildren(...(act.length?act.map(s=>mk(s,false)):[el("div",{class:"empty"}, bfFilter? "Ingen aktive sager for "+bfFilter+"." : "Ingen aktive sager.")]));
+    $("sagListe").replaceChildren(...(act.length?act.map(s=>mk(s,false)):[el("div",{class:"empty"}, bfFilter? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening." : "Ingen aktive sager for "+bfFilter+".") : "Ingen aktive sager.")]));
     $("arkivListe").replaceChildren(...(ark.length?ark.map(s=>mk(s,true)):[el("div",{class:"empty"},"Ingen afsluttede sager.")]));
     $("arkivSum").textContent="Afsluttede sager ("+ark.length+")";
   }
