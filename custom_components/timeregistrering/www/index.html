@@ -152,6 +152,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="f">Boligforening – initialer (valgfrit)<input type="text" id="sagBf" list="bfListe" placeholder="Fx OB" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
       <datalist id="bfListe"></datalist>
       <label class="f">Beskrivelse (valgfrit)<textarea id="sagBesk" placeholder="Fx dørblad udskiftning" rows="3"></textarea></label>
+      <div class="note hidden" id="sagFindes" role="alert" style="display:flex;flex-direction:column;gap:10px"><span id="sagFindesTxt"></span><button type="button" class="btn primary" id="sagFindesRet">Ret den i stedet</button></div>
       <div class="row"><button type="button" class="btn hidden" id="sagAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="sagSubmit">Tilføj sag</button></div>
     </form>
     <div class="card">
@@ -674,7 +675,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
     else $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
   }
-  function slutRetSag(){ retSag=null; $("sagForm").reset(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
+  function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
   $("sagAnnuller").addEventListener("click", slutRetSag);
 
   function startRetFast(id){
@@ -724,12 +725,27 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(ok){ if(retPost) slutRetPost(); else rydPostForm(); }
   });
 
+  let sagFindesId=null;
+  function visSagFindes(s){
+    sagFindesId=s.id;
+    $("sagFindesTxt").textContent="Sag "+s.nr+" findes allerede"+(s.adresse? " ("+s.adresse+")":"")+(s.arkiveret? " og er afsluttet":"")+".";
+    $("sagFindesRet").textContent = s.arkiveret? "Genåbn og ret den i stedet" : "Ret den i stedet";
+    $("sagFindes").classList.remove("hidden");
+  }
+  function skjulSagFindes(){ sagFindesId=null; $("sagFindes").classList.add("hidden"); }
+  $("sagNr").addEventListener("input", skjulSagFindes);
+  $("sagFindesRet").addEventListener("click", async ()=>{
+    const id=sagFindesId; skjulSagFindes(); const s=items.get(id); if(!s) return;
+    if(s.arkiveret){ await save(id, Object.assign({},s,{arkiveret:false}), "Sag genåbnet"); }
+    startRetSag(id);
+  });
   const bfVal=()=>$("sagBf").value.trim().toUpperCase().replace(/\s+/g," ");
   $("sagForm").addEventListener("submit", async e=>{
     e.preventDefault();
     const nr=$("sagNr").value.trim(), adr=$("sagAdr").value.trim();
     if(!nr||!adr){ toast("Udfyld sagsnummer og adresse"); return; }
-    if(sager().some(s=>s.id!==retSag && s.nr===nr && !s.arkiveret)){ toast("Sag "+nr+" findes allerede"); return; }
+    const findes=sager().filter(s=>s.id!==retSag && s.nr===nr).sort((a,b)=>(a.arkiveret?1:0)-(b.arkiveret?1:0))[0];
+    if(findes){ visSagFindes(findes); return; }
     if(retSag){
       const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal()});
       const ok=await save(retSag,d,"Ændring gemt"); if(ok) slutRetSag(); return;
