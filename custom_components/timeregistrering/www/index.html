@@ -158,7 +158,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="check" style="font-weight:600"><input type="checkbox" id="sagAftale"> Aftale</label>
       <div class="hidden" id="aftaleFelter" style="display:flex;flex-direction:column;gap:12px">
         <label class="f">Dato<input type="date" id="aftaleDato"></label>
-        <label class="f">Klokkeslæt<input type="time" id="aftaleTid" value="07:00"></label>
+        <label class="f">Starttid<input type="time" id="aftaleTid" value="07:00"></label>
+        <label class="f">Sluttid<input type="time" id="aftaleSlut" value="08:00"></label>
       </div>
       <label class="f">Beskrivelse (valgfrit)<textarea id="sagBesk" placeholder="Fx dørblad udskiftning" rows="3"></textarea></label>
       <div class="note hidden" id="kalBanner" style="background:#E5F2EC;color:#17583F;display:flex;flex-direction:column;gap:10px"><span id="kalBannerTxt"></span><div id="kalBannerKnap"></div></div>
@@ -199,6 +200,11 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   <!-- AFTALER -->
   <section id="v-aftaler" data-view class="hidden">
     <header class="top"><div><a href="#sager" style="font-weight:600;text-decoration:none;color:var(--accent);display:inline-flex;min-height:44px;align-items:center">‹ Sager</a><h1>Aftaler</h1></div></header>
+    <div class="card" id="kalKort">
+      <h2>Telefonens kalender</h2>
+      <p class="muted" style="margin:0">Abonnér én gang, så kommer alle dine aftaler automatisk i iPhonens kalender – og de bliver opdateret, når du flytter eller sletter dem. iPhonen henter ændringer jævnligt, så der kan gå lidt tid.</p>
+      <div id="kalKnapBox"></div>
+    </div>
     <div id="aftaleListe"></div>
     <div class="card"><details><summary id="tidlAftSum">Tidligere aftaler</summary><div id="tidlAftListe" class="list"></div></details></div>
   </section>
@@ -373,6 +379,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       if(changed){ rebuild(); renderAll(); }
       syncState.last=Date.now(); try{ localStorage.setItem("tm_lastSync",String(syncState.last)); }catch(e){}
       setSync("ok");
+      if(!kalLink()) hentKalLink();
     }catch(e){
       if(e.login) setSync("login");
       else if(e.missing) setSync("error","Serveren svarer ikke");
@@ -431,13 +438,13 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const list=activeSager().filter(s=>bfMatch(s) || harAft(s));
     const dagens=list.filter(harAft).sort((a,b)=>(a.aftale.tid||"").localeCompare(b.aftale.tid||""));
     const resten=list.filter(s=>!harAft(s));
-    sel.replaceChildren(...[...dagens,...resten].map(s=>el("option",{value:s.id}, (harAft(s)? "Kl. "+(s.aftale.tid||"")+" · ":"")+(s.bf? s.bf+" · ":"")+s.nr+" · "+s.adresse)));
+    sel.replaceChildren(...[...dagens,...resten].map(s=>el("option",{value:s.id}, (harAft(s)? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+s.nr+" · "+s.adresse)));
     if(pendingSel && list.some(s=>s.id===pendingSel)){ sel.value=pendingSel; pendingSel=null; }
     else if(dagens.length && aftaleValgtFor!==dato){ sel.value=dagens[0].id; aftaleValgtFor=dato; }
     else if(list.some(s=>s.id===prev)) sel.value=prev;
     const da=$("dagensAftaler");
     da.classList.toggle("hidden", !dagens.length);
-    da.textContent = dagens.length? (dato===today()? "Aftaler i dag: ":"Aftaler denne dag: ")+dagens.map(s=>"kl. "+(s.aftale.tid||"")+" "+s.adresse).join(", ") : "";
+    da.textContent = dagens.length? (dato===today()? "Aftaler i dag: ":"Aftaler denne dag: ")+dagens.map(s=>"kl. "+tidTxt(s.aftale)+" "+s.adresse).join(", ") : "";
     $("ingenSager").classList.toggle("hidden", list.length>0);
     if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening" : "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,""))+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
     $("gem").disabled = list.length===0;
@@ -675,35 +682,47 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const ok=await save(retPakke||newId("pakke"), {kind:"pakke", navn, items:[...pakkeValg]}, retPakke?"Ændring gemt":"Liste oprettet");
     if(ok) slutRetPakke();
   });
-  function aftaleTxt(a){ return fmtDato(a.dato)+(a.tid? " kl. "+a.tid:""); }
+  function tidTxt(a){ return a.tid? a.tid+(a.slut? "–"+a.slut : "") : ""; }
+  function aftaleTxt(a){ return fmtDato(a.dato)+(a.tid? " kl. "+tidTxt(a):""); }
   function kalenderUrl(s){
     const a=s.aftale; if(!a||!a.dato) return null;
     const start=a.dato.replace(/-/g,"")+"T"+((a.tid||"07:00").replace(":",""))+"00";
-    const json=JSON.stringify({t:(s.bf? s.bf+" ":"")+"Sag "+s.nr+" – "+s.adresse, s:start, l:s.adresse||"", n:s.besk||"", u:s.id});
+    const min=t=>{ const m=/^(\d{1,2}):(\d{2})/.exec(t||""); return m? (+m[1])*60+(+m[2]) : null; };
+    let varighed=60; const a0=min(a.tid), a1=min(a.slut); if(a0!=null && a1!=null && a1>a0) varighed=a1-a0;
+    const json=JSON.stringify({d:String(varighed), t:(s.bf? s.bf+" ":"")+"Sag "+s.nr+" – "+s.adresse, s:start, l:s.adresse||"", n:s.besk||"", u:s.id});
     const b64=btoa(unescape(encodeURIComponent(json))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
     return "/api/timeregistrering/ics?d="+b64;
   }
-  function kalenderKnap(s){
-    const url=kalenderUrl(s); if(!url) return null;
-    if(HA) return el("a",{class:"btn small",href:url,target:"_blank",style:"display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)"},"Læg i kalender");
-    return el("button",{type:"button",class:"btn small",disabled:"",title:"Virker kun i appen fra Home Assistant"},"Læg i kalender");
+  // Kalenderabonnement: hemmeligt link fra serveren, gemt på enheden.
+  function kalLink(){ try{ return localStorage.getItem("tm_kal")||""; }catch(e){ return ""; } }
+  async function hentKalLink(){
+    if(!HA) return;
+    try{ const r=await api("kalenderlink"); if(!r.ok) return; const j=await r.json(); if(j&&j.sti){ try{ localStorage.setItem("tm_kal","webcal://"+location.host+j.sti); }catch(e){} renderAftaler(); } }catch(e){}
+  }
+  function abonnerKnap(stor){
+    const link=kalLink();
+    if(!HA) return el("div",{class:"muted"},"Virker kun i appen fra Home Assistant.");
+    if(!link) return el("button",{type:"button",class:"btn",onclick:()=>hentKalLink()},"Hent kalenderlink");
+    const a=el("a",{class:"btn primary",href:link,style:"display:flex;align-items:center;justify-content:center;text-decoration:none;color:#fff"},"Abonnér i kalenderen");
+    a.addEventListener("click",()=>{ try{ localStorage.setItem("tm_kal_ok","1"); }catch(e){} setTimeout(()=>$("kalBanner").classList.add("hidden"),500); });
+    return a;
   }
   function renderAftaler(){
     const alle=sager().filter(s=>s.aftale&&s.aftale.dato).sort((a,b)=>(a.aftale.dato+(a.aftale.tid||"")).localeCompare(b.aftale.dato+(b.aftale.tid||"")));
     const idag=today();
     const kommende=alle.filter(s=>s.aftale.dato>=idag), tidl=alle.filter(s=>s.aftale.dato<idag).reverse();
     $("aftaleKnap").textContent="Aftaler ("+kommende.length+")";
+    $("kalKnapBox").replaceChildren(abonnerKnap());
     const raekke=s=>el("div",{class:"item"},
-      el("div",{class:"txt"}, el("span",{class:"tag"},(s.aftale.tid? "Kl. "+s.aftale.tid+" · ":"")+(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.arkiveret? el("span",{class:"muted"},"Afsluttet"):null),
+      el("div",{class:"txt"}, el("span",{class:"tag"},(s.aftale.tid? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.arkiveret? el("span",{class:"muted"},"Afsluttet"):null),
       el("div",{class:"row",style:"flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end"},
-        kalenderKnap(s),
         el("button",{type:"button",class:"btn small",onclick:()=>{ $("dato").value=s.aftale.dato; pendingSel=s.id; aftaleValgtFor=s.aftale.dato; location.hash="idag"; renderSagValg(); renderDag(); }},"Notér"),
         el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret")));
     const grp={}; for(const s of kommende){ (grp[s.aftale.dato]=grp[s.aftale.dato]||[]).push(s); }
     const kort=Object.keys(grp).map(d=>el("div",{class:"card"}, el("h2",null, d===idag? "I dag – "+fmtDato(d) : fmtDato(d)), el("div",{class:"list"},...grp[d].map(raekke))));
     $("aftaleListe").replaceChildren(...(kort.length? kort : [el("div",{class:"card"},el("div",{class:"empty"},"Ingen kommende aftaler. Sæt flueben i Aftale på en sag."))]));
     $("tidlAftSum").textContent="Tidligere aftaler ("+tidl.length+")";
-    $("tidlAftListe").replaceChildren(...(tidl.length? tidl.map(s=>{ const r=raekke(s); r.querySelector(".tag").textContent=fmtDato(s.aftale.dato)+(s.aftale.tid?" kl. "+s.aftale.tid:"")+" · Sag "+s.nr; return r; }) : [el("div",{class:"empty"},"Ingen.")]));
+    $("tidlAftListe").replaceChildren(...(tidl.length? tidl.map(s=>{ const r=raekke(s); r.querySelector(".tag").textContent=fmtDato(s.aftale.dato)+(s.aftale.tid?" kl. "+tidTxt(s.aftale):"")+" · Sag "+s.nr; return r; }) : [el("div",{class:"empty"},"Ingen.")]));
   }
   function renderAll(){ renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
@@ -732,7 +751,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function startRetSag(id){
     const s=items.get(id); if(!s) return; retSag=id;
     $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||"";
-    $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; visAftaleFelter();
+    $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; $("aftaleSlut").value=s.aftale?(s.aftale.slut||""):"08:00"; visAftaleFelter();
     $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden");
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
     else $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
@@ -803,15 +822,16 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   });
   function visKalBanner(id, aendret){
     const s=sagById(id); const b=$("kalBanner");
+    let ok=false; try{ ok=localStorage.getItem("tm_kal_ok")==="1"; }catch(e){}
     if(!aendret || !s || !s.aftale || !HA){ b.classList.add("hidden"); return; }
-    $("kalBannerTxt").textContent="Aftale "+aftaleTxt(s.aftale)+" på "+s.adresse+". Vil du have den i telefonens kalender?";
-    const k=kalenderKnap(s); k.classList.remove("small"); k.style.justifyContent="center";
-    k.addEventListener("click",()=>setTimeout(()=>b.classList.add("hidden"),500));
-    $("kalBannerKnap").replaceChildren(k); b.classList.remove("hidden");
+    if(ok){ b.classList.add("hidden"); toast("Aftalen kommer i kalenderen"); return; }
+    $("kalBannerTxt").textContent="Aftale "+aftaleTxt(s.aftale)+". Vil du have dine aftaler i telefonens kalender? Abonnér én gang, så kommer alle aftaler automatisk.";
+    $("kalBannerKnap").replaceChildren(abonnerKnap()); b.classList.remove("hidden");
   }
   function visAftaleFelter(){ $("aftaleFelter").classList.toggle("hidden", !$("sagAftale").checked); if($("sagAftale").checked && !$("aftaleDato").value) $("aftaleDato").value=today(); }
   $("sagAftale").addEventListener("change", visAftaleFelter);
-  const aftaleVal=()=> $("sagAftale").checked && $("aftaleDato").value ? {dato:$("aftaleDato").value, tid:$("aftaleTid").value||""} : null;
+  $("aftaleTid").addEventListener("change",()=>{ const [h,m]=($("aftaleTid").value||"07:00").split(":").map(Number); const sl=$("aftaleSlut").value; if(!sl || sl<=$("aftaleTid").value){ const t=Math.min(h+1,23); $("aftaleSlut").value=String(t).padStart(2,"0")+":"+String(m).padStart(2,"0"); } });
+  const aftaleVal=()=> $("sagAftale").checked && $("aftaleDato").value ? {dato:$("aftaleDato").value, tid:$("aftaleTid").value||"", slut:$("aftaleSlut").value||""} : null;
   const bfVal=()=>$("sagBf").value.trim().toUpperCase().replace(/\s+/g," ");
   $("sagForm").addEventListener("submit", async e=>{
     e.preventDefault();

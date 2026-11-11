@@ -83,6 +83,39 @@ class Store:
             return data
 
 
+    # --- kalenderabonnement: et hemmeligt link pr. bruger ---
+    def _tokens(self) -> dict[str, str]:
+        f = self.root / "kalender_tokens.json"
+        try:
+            d = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+            return d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def token_for(self, user_id: str) -> str:
+        import secrets
+
+        with self._laas:
+            d = self._tokens()
+            for tok, uid in d.items():
+                if uid == user_id:
+                    return tok
+            tok = secrets.token_urlsafe(24)
+            d[tok] = user_id
+            f = self.root / "kalender_tokens.json"
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(d), encoding="utf-8")
+            os.replace(tmp, f)
+            return tok
+
+    def user_for(self, token: str) -> str | None:
+        return self._tokens().get(token)
+
+    def laes(self, user_id: str) -> dict[str, dict]:
+        with self._laas:
+            return self._laes(user_id)
+
+
 class SyncView(HomeAssistantView):
     """GET: alle poster. POST {"poster":[...]}: flet ind og få alle poster tilbage."""
 
@@ -213,6 +246,92 @@ class IcsView(HomeAssistantView):
         )
 
 
+def _minutter(t: str) -> int | None:
+    m = re.match(r"^(\d{1,2}):(\d{2})", t or "")
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+class KalenderLinkView(HomeAssistantView):
+    """Giver den indloggede bruger sit hemmelige abonnementslink."""
+
+    url = "/api/timeregistrering/kalenderlink"
+    name = "api:timeregistrering:kalenderlink"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant, store: Store) -> None:
+        self.hass = hass
+        self.store = store
+
+    async def get(self, request: web.Request) -> web.Response:
+        tok = await self.hass.async_add_executor_job(self.store.token_for, request["hass_user"].id)
+        return self.json({"sti": f"/api/timeregistrering/kalender/{tok}.ics"})
+
+
+class KalenderFeedView(HomeAssistantView):
+    """Kalenderabonnement (webcal) med alle brugerens aftaler. Adgang via det hemmelige link."""
+
+    url = "/api/timeregistrering/kalender/{token}.ics"
+    name = "api:timeregistrering:kalender"
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant, store: Store) -> None:
+        self.hass = hass
+        self.store = store
+
+    async def get(self, request: web.Request, token: str) -> web.Response:
+        from datetime import datetime, timedelta, timezone
+        from zoneinfo import ZoneInfo
+
+        uid = await self.hass.async_add_executor_job(self.store.user_for, token)
+        if not uid:
+            return web.Response(status=404, text="Ukendt kalender")
+        data = await self.hass.async_add_executor_job(self.store.laes, uid)
+        tz = ZoneInfo(self.hass.config.time_zone or "Europe/Copenhagen")
+        fmt = "%Y%m%dT%H%M%SZ"
+        nu = datetime.now(timezone.utc).strftime(fmt)
+        linjer = [
+            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Timer og materialer//DA", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+            "X-WR-CALNAME:Aftaler (Timer)", "REFRESH-INTERVAL;VALUE=DURATION:PT15M", "X-PUBLISHED-TTL:PT15M",
+        ]
+        for r in data.values():
+            if r.get("deleted") or r.get("kind") != "sag":
+                continue
+            a = r.get("aftale")
+            if not isinstance(a, dict) or not a.get("dato"):
+                continue
+            try:
+                dag = datetime.strptime(a["dato"], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            t0 = _minutter(a.get("tid", "")) 
+            t0 = 7 * 60 if t0 is None else t0
+            t1 = _minutter(a.get("slut", ""))
+            varighed = t1 - t0 if t1 is not None and t1 > t0 else 60
+            start = (dag + timedelta(minutes=t0)).replace(tzinfo=tz).astimezone(timezone.utc)
+            slut = start + timedelta(minutes=varighed)
+            titel = ((r.get("bf") + " ") if r.get("bf") else "") + "Sag " + str(r.get("nr", "")) + " – " + str(r.get("adresse", ""))
+            linjer += [
+                "BEGIN:VEVENT",
+                f"UID:{r.get('id')}@timeregistrering",
+                f"DTSTAMP:{nu}",
+                f"LAST-MODIFIED:{datetime.fromtimestamp((r.get('updated') or 0) / 1000, timezone.utc).strftime(fmt)}",
+                f"DTSTART:{start.strftime(fmt)}",
+                f"DTEND:{slut.strftime(fmt)}",
+                f"SUMMARY:{_ics_tekst(titel)}",
+            ]
+            if r.get("adresse"):
+                linjer.append(f"LOCATION:{_ics_tekst(str(r['adresse']))}")
+            if r.get("besk"):
+                linjer.append(f"DESCRIPTION:{_ics_tekst(str(r['besk']))}")
+            if r.get("arkiveret"):
+                linjer.append("STATUS:CONFIRMED")
+            linjer += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Aftale", "TRIGGER:-PT30M", "END:VALARM", "END:VEVENT"]
+        linjer.append("END:VCALENDAR")
+        body = "\r\n".join(_ics_fold(l) for l in linjer) + "\r\n"
+        return web.Response(body=body.encode("utf-8"), content_type="text/calendar", charset="utf-8",
+                            headers={"Cache-Control": "no-store"})
+
+
 class AppRedirectView(HomeAssistantView):
     """Kort adresse: /timer-start → appen."""
 
@@ -233,7 +352,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not data.get("http_registered"):
         # HTTP-ruter kan ikke fjernes igen, så de registreres kun én gang pr. opstart.
         await hass.http.async_register_static_paths([StaticPathConfig(APP_URL, str(WWW), False)])
-        for view in (SyncView(hass, store), MigView(), IcsView(hass), AppRedirectView()):
+        for view in (SyncView(hass, store), MigView(), IcsView(hass), KalenderLinkView(hass, store),
+                     KalenderFeedView(hass, store), AppRedirectView()):
             hass.http.register_view(view)
         data["http_registered"] = True
 
