@@ -72,6 +72,18 @@ label.f{min-width:0}
 .sek-mat{background:#EEF3FA;--sline:#CADAF0;--sink:#1F4E85}
 .sek-pakke{background:#F3EFF9;--sline:#DDD3EE;--sink:#5A3E8C}
 .sek-link{background:#FBF5E8!important;border-color:#EEDDB0!important;color:#6E520C!important}
+/* Lille menu øverst på Sager, som bliver hængende når man scroller */
+.hop{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+  margin:0 -16px;padding:calc(8px + env(safe-area-inset-top)) 16px 8px;background:rgba(244,245,242,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--soft)}
+.hop::-webkit-scrollbar{display:none}
+.hop button,.hop a{flex:0 0 auto;min-height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--hl,#C9CEC9);background:var(--hb,#fff);color:var(--hi,var(--ink));font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}
+.hop .h-ny{--hb:#EEF6F2;--hl:#CFE6DA;--hi:#17583F}
+.hop .h-aktiv{--hb:#fff;--hl:#CFE6DA;--hi:#17583F}
+.hop .h-mat{--hb:#EEF3FA;--hl:#CADAF0;--hi:#1F4E85}
+.hop .h-pakke{--hb:#F3EFF9;--hl:#DDD3EE;--hi:#5A3E8C}
+.hop .h-link{--hb:#FBF5E8;--hl:#EEDDB0;--hi:#6E520C}
+.hop button[aria-current=true]{background:var(--hi);color:#fff;border-color:var(--hi)}
+#v-sager .sek{scroll-margin-top:calc(70px + env(safe-area-inset-top))}
 .formboks{background:var(--tbg);border:1px solid var(--tline);border-radius:14px;padding:12px}
 .seg button[data-type=timer][aria-pressed=true]{background:#E7F3EC;color:#17583F}
 .seg button[data-type=materiale][aria-pressed=true]{background:#E8F0FA;color:#1F4E85}
@@ -183,6 +195,14 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   <!-- SAGER -->
   <section id="v-sager" data-view class="hidden">
     <header class="top"><h1>Sager</h1></header>
+    <nav class="hop" aria-label="Hop til afsnit">
+      <button type="button" data-hop="sagForm" class="h-ny">Ny sag</button>
+      <button type="button" data-hop="aktivKort" class="h-aktiv">Aktive</button>
+      <button type="button" data-hop="fastForm" class="h-mat">Materialer</button>
+      <button type="button" data-hop="pakkeForm" class="h-pakke">Lister</button>
+      <a href="#aftaler" class="h-link">Aftaler</a>
+      <a href="#afsluttede" class="h-link">Afsluttede</a>
+    </nav>
     <form class="card sek sek-ny" id="sagForm">
       <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
@@ -200,7 +220,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="note hidden" id="sagFindes" role="alert" style="display:flex;flex-direction:column;gap:10px"><span id="sagFindesTxt"></span><button type="button" class="btn primary" id="sagFindesRet">Ret den i stedet</button></div>
       <div class="row"><button type="button" class="btn hidden" id="sagAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="sagSubmit">Tilføj sag</button></div>
     </form>
-    <div class="card sek sek-aktiv">
+    <div class="card sek sek-aktiv" id="aktivKort">
       <h2>Aktive sager</h2>
       <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <div id="sagListe" class="list"></div>
@@ -758,6 +778,20 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("tidlAftSum").textContent="Tidligere aftaler ("+tidl.length+")";
     $("tidlAftListe").replaceChildren(...(tidl.length? tidl.map(s=>{ const r=raekke(s); r.querySelector(".tag").textContent=fmtDato(s.aftale.dato)+(s.aftale.tid?" kl. "+tidTxt(s.aftale):"")+" · Sag "+s.nr; return r; }) : [el("div",{class:"empty"},"Ingen.")]));
   }
+  // Hop-menuen på Sager
+  document.querySelectorAll(".hop button[data-hop]").forEach(b=>b.addEventListener("click",()=>{
+    const m=$(b.dataset.hop); if(m) m.scrollIntoView({behavior:"smooth",block:"start"});
+  }));
+  function markerHop(){
+    if($("v-sager").classList.contains("hidden")) return;
+    const top=$("v-sager").querySelector(".hop").getBoundingClientRect().bottom+12;
+    let aktiv=null;
+    document.querySelectorAll(".hop button[data-hop]").forEach(b=>{ const m=$(b.dataset.hop); if(m && m.getBoundingClientRect().top<=top+40) aktiv=b; });
+    if(!aktiv) aktiv=document.querySelector(".hop button[data-hop]");
+    document.querySelectorAll(".hop button[data-hop]").forEach(b=>b.setAttribute("aria-current", b===aktiv?"true":"false"));
+  }
+  window.addEventListener("scroll", ()=>requestAnimationFrame(markerHop), {passive:true});
+  window.addEventListener("hashchange", ()=>setTimeout(markerHop,50));
   function renderAll(){ renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
