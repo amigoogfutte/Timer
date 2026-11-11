@@ -63,6 +63,15 @@ label.f{min-width:0}
 .boks .tag,.boks .bokstitel{color:var(--tink)}
 .bokstitel{font-size:13px;font-weight:700;margin-bottom:4px}
 .list .item.boks{border-top:1px solid var(--tline);margin-bottom:6px}
+/* Sektioner på Sager-siden */
+.sek{border:1px solid var(--sline)}
+.sek > h2:first-child,.sek .sekhead{color:var(--sink);display:flex;align-items:center;gap:8px}
+.sek > h2:first-child::before,.sek .sekhead::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--sink);flex:0 0 auto}
+.sek-ny{background:#EEF6F2;--sline:#CFE6DA;--sink:#17583F}
+.sek-aktiv{background:#FFFFFF;--sline:#CFE6DA;--sink:#17583F}
+.sek-mat{background:#EEF3FA;--sline:#CADAF0;--sink:#1F4E85}
+.sek-pakke{background:#F3EFF9;--sline:#DDD3EE;--sink:#5A3E8C}
+.sek-link{background:#FBF5E8!important;border-color:#EEDDB0!important;color:#6E520C!important}
 .formboks{background:var(--tbg);border:1px solid var(--tline);border-radius:14px;padding:12px}
 .seg button[data-type=timer][aria-pressed=true]{background:#E7F3EC;color:#17583F}
 .seg button[data-type=materiale][aria-pressed=true]{background:#E8F0FA;color:#1F4E85}
@@ -174,7 +183,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   <!-- SAGER -->
   <section id="v-sager" data-view class="hidden">
     <header class="top"><h1>Sager</h1></header>
-    <form class="card" id="sagForm">
+    <form class="card sek sek-ny" id="sagForm">
       <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
       <label class="f">Adresse<input type="text" id="sagAdr" placeholder="Fx Munkemaen 100 A" autocomplete="off" required></label>
@@ -191,12 +200,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="note hidden" id="sagFindes" role="alert" style="display:flex;flex-direction:column;gap:10px"><span id="sagFindesTxt"></span><button type="button" class="btn primary" id="sagFindesRet">Ret den i stedet</button></div>
       <div class="row"><button type="button" class="btn hidden" id="sagAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="sagSubmit">Tilføj sag</button></div>
     </form>
-    <div class="card">
+    <div class="card sek sek-aktiv">
       <h2>Aktive sager</h2>
       <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <div id="sagListe" class="list"></div>
     </div>
-    <form class="card" id="fastForm">
+    <form class="card sek sek-mat" id="fastForm">
       <h2>Faste materialer</h2>
       <p class="muted" style="margin:0">Materialer du ofte bruger. De vises som knapper, når du noterer materiale.</p>
       <label class="f">Navn<input type="text" id="fastNavn" placeholder="Fx Bortskaffelse af affald" autocomplete="off" required></label>
@@ -208,7 +217,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="row"><button type="button" class="btn hidden" id="fastAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="fastSubmit">Tilføj fast materiale</button></div>
       <details id="fastDetails"><summary id="fastSum">Oprettede materialer</summary><div id="fastListe" class="list"></div></details>
     </form>
-    <form class="card" id="pakkeForm">
+    <form class="card sek sek-pakke" id="pakkeForm">
       <h2 id="pakkeTitel">Tilbehørslister</h2>
       <p class="muted" style="margin:0">Fx "Montage af vinduer" med karmskruer, fugebagstop, fugefilt og fuge. Listen vises som en knap, når du noterer materiale.</p>
       <label class="f">Navn på listen<input type="text" id="pakkeNavn" placeholder="Fx Montage af vinduer" autocomplete="off"></label>
@@ -218,8 +227,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="row"><button type="button" class="btn hidden" id="pakkeAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="pakkeSubmit">Opret liste</button></div>
       <details><summary id="pakkeSum">Oprettede lister</summary><div id="pakkeListe" class="list"></div></details>
     </form>
-    <a href="#aftaler" class="btn" id="aftaleKnap" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Aftaler</a>
-    <a href="#afsluttede" class="btn" id="arkivSum" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Afsluttede sager</a>
+    <a href="#aftaler" class="btn sek-link" id="aftaleKnap" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Aftaler</a>
+    <a href="#afsluttede" class="btn sek-link" id="arkivSum" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Afsluttede sager</a>
   </section>
 
   <!-- AFTALER -->
