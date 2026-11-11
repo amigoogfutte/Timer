@@ -65,6 +65,13 @@ nav.tabs a[aria-current=page]{background:var(--soft);color:var(--ink)}
 .check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
 .check input{width:24px;height:24px}
 details summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+details.sagdag{border-top:1px solid var(--soft)}
+details.sagdag:first-child{border-top:none}
+details.sagdag summary{justify-content:space-between;gap:10px;list-style:none;padding:6px 0}
+details.sagdag summary::-webkit-details-marker{display:none}
+details.sagdag summary .pil{display:inline-block;transition:transform .15s;color:var(--muted);margin-right:6px}
+details.sagdag[open] summary .pil{transform:rotate(90deg)}
+details.sagdag .list{padding:0 0 8px 18px}
 #syncBar{font-size:14px;padding:10px 12px;border-radius:10px;margin-bottom:4px;cursor:pointer;border:none;width:100%;text-align:left;min-height:44px}
 #syncBar.ok{background:#E5F2EC;color:#17583F}
 #syncBar.busy,#syncBar.offline{background:#E9ECEF;color:#3F4A45}
@@ -127,7 +134,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     </div>
 
     <div class="card">
-      <div class="sum"><h2>Noteret denne dag</h2><span class="muted" id="dagSum"></span></div>
+      <div class="sum" style="align-items:center"><h2 id="dagTitel">Noteret i dag</h2><span style="display:flex;flex-direction:column;align-items:flex-end"><span class="big" id="dagSum" style="font-size:28px">0</span><span class="muted">timer i alt</span></span></div>
       <div id="dagListe" class="list"></div>
     </div>
   </section>
@@ -379,18 +386,28 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
   const typeNavn={timer:"Timer",materiale:"Materiale",note:"Note"};
 
+  const aabneSager=new Set();
   function renderDag(){
     const dato=$("dato").value;
     $("idagDatoTxt").textContent = fmtDato(dato);
     const posts=all("post").filter(p=>p.dato===dato).sort((a,b)=>(a.oprettet||0)-(b.oprettet||0));
     const total=posts.filter(p=>p.type==="timer").reduce((s,p)=>s+Number(p.timer||0),0);
-    $("dagSum").textContent = fmtNum(total)+" timer";
+    $("dagSum").textContent = fmtNum(total);
+    $("dagTitel").textContent = dato===today()? "Noteret i dag" : "Noteret denne dag";
     const box=$("dagListe");
     if(!posts.length){ box.replaceChildren(el("div",{class:"empty"},"Intet noteret endnu.")); return; }
     const groups={}; for(const p of posts){ (groups[p.sagId]=groups[p.sagId]||[]).push(p); }
     const out=[];
     for(const sid in groups){
-      out.push(el("h2",{style:"margin-top:8px;font-size:15px"}, sagNavn(sagById(sid))));
+      const s=sagById(sid);
+      const sagTimer=groups[sid].filter(p=>p.type==="timer").reduce((a,p)=>a+Number(p.timer||0),0);
+      const det=el("details",{class:"sagdag"});
+      if(aabneSager.has(sid)) det.open=true;
+      det.addEventListener("toggle",()=>{ det.open? aabneSager.add(sid) : aabneSager.delete(sid); });
+      det.append(el("summary",null,
+        el("span",{style:"display:flex;align-items:center;min-width:0"}, el("span",{class:"pil","aria-hidden":"true"},"›"),
+          el("span",{style:"overflow-wrap:anywhere"}, s? ("Sag "+s.nr+" · "+s.adresse) : "Ukendt sag")),
+        el("span",{style:"flex:0 0 auto;font-weight:700"}, fmtNum(sagTimer)+" t")));
       const l=el("div",{class:"list"});
       for(const p of groups[sid]){
         l.append(el("div",{class:"item"},
@@ -399,7 +416,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
             el("button",{type:"button",class:"btn small",onclick:()=>startRetPost(p.id)},"Ret"),
             delBtn(()=>remove(p.id,"Slettet"),"Slet "+(typeNavn[p.type]||"").toLowerCase()))));
       }
-      out.push(l);
+      det.append(l); out.push(det);
     }
     box.replaceChildren(...out);
   }
