@@ -412,7 +412,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const l=el("div",{class:"list"});
       for(const p of groups[sid]){
         l.append(el("div",{class:"item"},
-          el("div",{class:"txt"}, el("span",{class:"tag"},typeNavn[p.type]||""), el("span",null,postLine(p))),
+          p.type==="timer"
+            ? el("div",{class:"txt"}, el("span",{class:"tag"},"Timer"), el("span",{style:"font-size:22px;font-weight:700;line-height:1.2"},fmtNum(p.timer)+" t"), p.tekst? el("span",{class:"muted"},p.tekst) : null)
+            : el("div",{class:"txt"}, el("span",{class:"tag"},typeNavn[p.type]||""), el("span",null,postLine(p))),
           el("div",{class:"row",style:"flex:0 0 auto"},
             el("button",{type:"button",class:"btn small",onclick:()=>startRetPost(p.id)},"Ret"),
             delBtn(()=>remove(p.id,"Slettet"),"Slet "+(typeNavn[p.type]||"").toLowerCase()))));
