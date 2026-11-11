@@ -45,6 +45,7 @@ textarea{min-height:80px;resize:vertical}
 .stepper .btn{width:60px;height:60px;font-size:26px;flex:0 0 auto}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid var(--line);background:#fff;font-weight:600;cursor:pointer}
+.chips button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
 .list{display:flex;flex-direction:column;gap:8px}
 .item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--soft)}
 .item:first-child{border-top:none}
@@ -117,7 +118,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
 
       <div id="f-materiale" class="hidden">
-        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div><div id="valgteBox" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"><div class="muted" id="valgteTxt"></div><div class="row"><button type="button" class="btn small" id="valgteRyd" style="flex:0 0 auto">Fravælg alle</button><button type="button" class="btn accent" id="valgteOk">OK</button></div></div><div class="muted" style="margin-top:10px">Eller skriv et materiale selv:</div></div>
+        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><div id="pakkeBox" class="hidden" style="margin-bottom:12px"><div class="muted" style="margin-bottom:8px">Tilbehørslister</div><div class="chips" id="pakkeChips"></div></div><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div><div id="valgteBox" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"><div class="muted" id="valgteTxt"></div><div class="row"><button type="button" class="btn small" id="valgteRyd" style="flex:0 0 auto">Fravælg alle</button><button type="button" class="btn accent" id="valgteOk">OK</button></div></div><div class="muted" style="margin-top:10px">Eller skriv et materiale selv:</div></div>
         <label class="f">Vare<input type="text" id="vare" list="vareListe" placeholder="Fx Bortskaffelse af affald" autocomplete="off"></label>
         <datalist id="vareListe"></datalist>
         <div class="row" style="margin-top:12px">
@@ -165,6 +166,16 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="f">Varenr. (valgfrit)<input type="text" id="fastNr" autocomplete="off"></label>
       <div class="row"><button type="button" class="btn hidden" id="fastAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="fastSubmit">Tilføj fast materiale</button></div>
       <details id="fastDetails"><summary id="fastSum">Oprettede materialer</summary><div id="fastListe" class="list"></div></details>
+    </form>
+    <form class="card" id="pakkeForm">
+      <h2 id="pakkeTitel">Tilbehørslister</h2>
+      <p class="muted" style="margin:0">Fx "Montage af vinduer" med karmskruer, fugebagstop, fugefilt og fuge. Listen vises som en knap, når du noterer materiale.</p>
+      <label class="f">Navn på listen<input type="text" id="pakkeNavn" placeholder="Fx Montage af vinduer" autocomplete="off"></label>
+      <label class="f">Find faste materialer at sætte på listen<input type="search" id="pakkeSoeg" placeholder="Søg – eller lad stå tom for at se alle" autocomplete="off"></label>
+      <div class="muted" id="pakkeAntal">0 valgt</div>
+      <div class="list" id="pakkeValgListe" style="max-height:320px;overflow:auto"></div>
+      <div class="row"><button type="button" class="btn hidden" id="pakkeAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="pakkeSubmit">Opret liste</button></div>
+      <details><summary id="pakkeSum">Oprettede lister</summary><div id="pakkeListe" class="list"></div></details>
     </form>
     <a href="#afsluttede" class="btn" id="arkivSum" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Afsluttede sager</a>
   </section>
@@ -510,11 +521,16 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
   function visFasteSoeg(){
     const box=$("fasteChips");
-    if(document.activeElement && box.contains(document.activeElement) && box.dataset.q===$("fastSoeg").value) { visValgte(); return; }
-    const q=$("fastSoeg").value.trim().toLowerCase(); box.dataset.q=$("fastSoeg").value;
+    const noegle=(aktivPakke||"")+"|"+$("fastSoeg").value;
+    if(document.activeElement && box.contains(document.activeElement) && box.dataset.q===noegle) { visValgte(); return; }
+    const q=$("fastSoeg").value.trim().toLowerCase(); box.dataset.q=noegle;
     for(const id of [...valgte.keys()]) if(!items.has(id)) valgte.delete(id);
-    if(!q){ box.replaceChildren(); visValgte(); return; }
-    const hits=faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+    const pk=aktivPakke? items.get(aktivPakke) : null;
+    if(!pk) aktivPakke=null;
+    $("pakkeChips").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.id===aktivPakke?"true":"false"));
+    if(!q && !pk){ box.replaceChildren(); visValgte(); return; }
+    const hits= pk ? (pk.items||[]).map(id=>Object.assign({id},items.get(id)||{})).filter(m=>m.kind==="fast").sort((a,b)=>a.navn.localeCompare(b.navn,"da"))
+                   : faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
     box.replaceChildren(...(hits.length? hits.map(m=>{
       const cb=el("input",{type:"checkbox","aria-label":"Vælg "+m.navn,style:"width:26px;height:26px;flex:0 0 auto"}); cb.checked=valgte.has(m.id);
       const an=el("input",{type:"text",inputmode:"decimal","aria-label":"Antal "+m.navn,style:"width:76px;min-height:44px;text-align:center;flex:0 0 auto"});
@@ -524,7 +540,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       return el("div",{class:"item",style:"gap:8px"},
         el("label",{style:"display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;cursor:pointer"}, cb, el("span",{style:"overflow-wrap:anywhere"},m.navn)),
         an, el("span",{class:"muted",style:"flex:0 0 auto;min-width:24px"},m.enhed||"stk"));
-    }) : [el("div",{class:"empty"},"Ingen faste materialer med ”"+$("fastSoeg").value.trim()+"”.")]));
+    }) : [el("div",{class:"empty"}, pk? "Listen er tom." : "Ingen faste materialer med ”"+$("fastSoeg").value.trim()+"”.")]));
+    if(pk) box.prepend(el("div",{class:"muted",style:"font-weight:600"}, pk.navn+" – sæt flueben ved det, du har brugt"));
     visValgte();
   }
   $("valgteRyd").addEventListener("click",()=>{ valgte.clear(); $("fasteChips").dataset.q=""; visFasteSoeg(); });
@@ -538,11 +555,66 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const ok=await save(newId("p"),{kind:"post", sagId, dato, type:"materiale", vare:m.navn, antal:a, enhed:m.enhed||"stk", varenr:m.varenr||"", oprettet:t+(n)});
       if(ok) n++;
     }
-    valgte.clear(); $("fastSoeg").value=""; $("fasteChips").dataset.q=""; visFasteSoeg();
+    valgte.clear(); aktivPakke=null; $("fastSoeg").value=""; $("fasteChips").dataset.q=""; visFasteSoeg();
     toast(n===1? "1 materiale gemt" : n+" materialer gemt");
   });
-  $("fastSoeg").addEventListener("input", visFasteSoeg);
-  function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderFaste(); renderSager(); renderHjem(); }
+  $("fastSoeg").addEventListener("input", ()=>{ if($("fastSoeg").value) aktivPakke=null; visFasteSoeg(); });
+
+  // ---------- tilbehørslister ----------
+  let aktivPakke=null, retPakke=null; const pakkeValg=new Set();
+  const pakker=()=>all("pakke").sort((a,b)=>a.navn.localeCompare(b.navn,"da"));
+  function renderPakker(){
+    const pl=pakker();
+    $("pakkeBox").classList.toggle("hidden", pl.length===0);
+    $("pakkeChips").replaceChildren(...pl.map(pk=>{
+      const b=el("button",{type:"button","data-id":pk.id,"aria-pressed":pk.id===aktivPakke?"true":"false"}, pk.navn);
+      b.addEventListener("click",()=>{ aktivPakke = aktivPakke===pk.id? null : pk.id; $("fastSoeg").value=""; $("fasteChips").dataset.q=""; visFasteSoeg(); });
+      return b; }));
+    $("pakkeSum").textContent="Oprettede lister ("+pl.length+")";
+    $("pakkeListe").replaceChildren(...(pl.length? pl.map(pk=>{
+      const navne=(pk.items||[]).map(id=>items.get(id)).filter(Boolean).map(m=>m.navn);
+      return el("div",{class:"item"},
+        el("div",{class:"txt"}, el("span",{style:"font-weight:600"},pk.navn), el("span",{class:"muted"}, navne.length? navne.join(", ") : "Ingen materialer")),
+        el("div",{class:"row",style:"flex:0 0 auto"},
+          el("button",{type:"button",class:"btn small",onclick:()=>startRetPakke(pk.id)},"Ret"),
+          delBtn(()=>remove(pk.id,"Liste slettet"),"Slet liste "+pk.navn)));
+    }) : [el("div",{class:"empty"},"Ingen lister endnu.")]));
+    visPakkeValg();
+  }
+  function visPakkeValg(){
+    const box=$("pakkeValgListe");
+    if(document.activeElement && box.contains(document.activeElement) && box.dataset.q===$("pakkeSoeg").value){ $("pakkeAntal").textContent=pakkeValg.size+" valgt"; return; }
+    box.dataset.q=$("pakkeSoeg").value;
+    const q=$("pakkeSoeg").value.trim().toLowerCase();
+    for(const id of [...pakkeValg]) if(!items.has(id)) pakkeValg.delete(id);
+    const f=faste().filter(m=>!q || m.navn.toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+    box.replaceChildren(...(f.length? f.map(m=>{
+      const cb=el("input",{type:"checkbox",style:"width:24px;height:24px;flex:0 0 auto"}); cb.checked=pakkeValg.has(m.id);
+      cb.addEventListener("change",()=>{ cb.checked? pakkeValg.add(m.id) : pakkeValg.delete(m.id); $("pakkeAntal").textContent=pakkeValg.size+" valgt"; });
+      return el("label",{class:"check",style:"font-weight:500;cursor:pointer"}, cb, m.navn);
+    }) : [el("div",{class:"empty"}, faste().length? "Ingen faste materialer matcher." : "Opret først nogle faste materialer ovenfor.")]));
+    $("pakkeAntal").textContent=pakkeValg.size+" valgt";
+  }
+  $("pakkeSoeg").addEventListener("input", visPakkeValg);
+  function startRetPakke(id){
+    const pk=items.get(id); if(!pk) return; retPakke=id;
+    $("pakkeNavn").value=pk.navn||""; pakkeValg.clear(); (pk.items||[]).forEach(x=>pakkeValg.add(x));
+    $("pakkeSoeg").value=""; $("pakkeValgListe").dataset.q="#"; visPakkeValg();
+    $("pakkeTitel").textContent="Ret liste"; $("pakkeSubmit").textContent="Gem ændringer"; $("pakkeAnnuller").classList.remove("hidden");
+    $("pakkeForm").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function slutRetPakke(){ retPakke=null; $("pakkeNavn").value=""; $("pakkeSoeg").value=""; pakkeValg.clear(); $("pakkeValgListe").dataset.q="#"; visPakkeValg();
+    $("pakkeTitel").textContent="Tilbehørslister"; $("pakkeSubmit").textContent="Opret liste"; $("pakkeAnnuller").classList.add("hidden"); }
+  $("pakkeAnnuller").addEventListener("click", slutRetPakke);
+  $("pakkeForm").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const navn=$("pakkeNavn").value.trim(); if(!navn){ toast("Skriv et navn på listen"); return; }
+    if(!pakkeValg.size){ toast("Vælg mindst ét materiale"); return; }
+    if(pakker().some(pk=>pk.id!==retPakke && pk.navn.toLowerCase()===navn.toLowerCase())){ toast("Der findes allerede en liste med det navn"); return; }
+    const ok=await save(retPakke||newId("pakke"), {kind:"pakke", navn, items:[...pakkeValg]}, retPakke?"Ændring gemt":"Liste oprettet");
+    if(ok) slutRetPakke();
+  });
+  function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
   function setType(t){
