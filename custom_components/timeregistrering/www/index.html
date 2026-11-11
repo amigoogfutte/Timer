@@ -109,7 +109,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
 
       <div id="f-materiale" class="hidden">
-        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><div class="muted" style="margin-bottom:8px">Faste materialer – tryk for at vælge</div><div class="chips" id="fasteChips"></div></div>
+        <details id="fasteBox" class="hidden" style="margin-bottom:12px"><summary id="fasteBoxSum">Faste materialer</summary><div class="chips" id="fasteChips" style="padding-top:4px"></div></details>
         <label class="f">Vare<input type="text" id="vare" list="vareListe" placeholder="Fx Bortskaffelse af affald" autocomplete="off"></label>
         <datalist id="vareListe"></datalist>
         <div class="row" style="margin-top:12px">
@@ -156,7 +156,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
       <label class="f">Varenr. (valgfrit)<input type="text" id="fastNr" autocomplete="off"></label>
       <div class="row"><button type="button" class="btn hidden" id="fastAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="fastSubmit">Tilføj fast materiale</button></div>
-      <div id="fastListe" class="list"></div>
+      <details id="fastDetails"><summary id="fastSum">Oprettede materialer</summary><div id="fastListe" class="list"></div></details>
     </form>
     <div class="card">
       <details><summary id="arkivSum">Afsluttede sager</summary><div id="arkivListe" class="list"></div></details>
@@ -469,7 +469,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("fasteBox").classList.toggle("hidden", f.length===0);
     $("fasteChips").replaceChildren(...f.map(m=>el("button",{type:"button",onclick:()=>{
       $("vare").value=m.navn; $("enhed").value=m.enhed||"stk"; $("varenr").value=m.varenr||""; $("antal").value=String(m.antal||1).replace(".",",");
-      $("antal").focus(); $("antal").select && $("antal").select(); }}, m.navn)));
+      $("fasteBox").open=false; $("antal").focus(); $("antal").select && $("antal").select(); }}, m.navn)));
+    $("fastSum").textContent="Oprettede materialer ("+f.length+")";
+    $("fasteBoxSum").textContent="Faste materialer ("+f.length+") – tryk for at vise";
     $("fastListe").replaceChildren(...(f.length? f.map(m=>el("div",{class:"item"},
       el("div",{class:"txt"}, el("span",{style:"font-weight:600"},m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")+(m.varenr?" · varenr. "+m.varenr:""))),
       el("div",{class:"row",style:"flex:0 0 auto"},
