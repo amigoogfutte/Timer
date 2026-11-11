@@ -1,6 +1,6 @@
 {
-  "name": "Timer og materialer",
-  "short_name": "Timer",
+  "name": "JCF timeregistrering",
+  "short_name": "JCF Timer",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
