@@ -117,7 +117,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
 
       <div id="f-materiale" class="hidden">
-        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div></div>
+        <div id="fasteBox" class="hidden" style="margin-bottom:12px"><label class="f">Søg i faste materialer<input type="search" id="fastSoeg" placeholder="Skriv fx affald" autocomplete="off"></label><div class="list" id="fasteChips" style="margin-top:6px"></div><div id="valgteBox" class="hidden" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"><div class="muted" id="valgteTxt"></div><div class="row"><button type="button" class="btn small" id="valgteRyd" style="flex:0 0 auto">Fravælg alle</button><button type="button" class="btn accent" id="valgteOk">OK</button></div></div><div class="muted" style="margin-top:10px">Eller skriv et materiale selv:</div></div>
         <label class="f">Vare<input type="text" id="vare" list="vareListe" placeholder="Fx Bortskaffelse af affald" autocomplete="off"></label>
         <datalist id="vareListe"></datalist>
         <div class="row" style="margin-top:12px">
@@ -499,16 +499,48 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         el("button",{type:"button",class:"btn small",onclick:()=>startRetFast(m.id)},"Ret"),
         delBtn(()=>remove(m.id,"Fjernet"),"Fjern "+m.navn)))) : [el("div",{class:"empty"},"Ingen faste materialer endnu.")]));
   }
-  function visFasteSoeg(){
-    const q=$("fastSoeg").value.trim().toLowerCase();
-    const box=$("fasteChips");
-    if(!q){ box.replaceChildren(); return; }
-    const hits=faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
-    box.replaceChildren(...(hits.length? hits.map(m=>el("button",{type:"button",class:"btn",style:"text-align:left;font-weight:500;display:flex;justify-content:space-between;gap:8px;align-items:center",onclick:()=>{
-      $("vare").value=m.navn; $("enhed").value=m.enhed||"stk"; $("varenr").value=m.varenr||""; $("antal").value=String(m.antal||1).replace(".",",");
-      $("fastSoeg").value=""; box.replaceChildren(); $("antal").focus(); $("antal").select && $("antal").select(); }},
-      el("span",null,m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")))) : [el("div",{class:"empty"},"Ingen faste materialer med \u201d"+$("fastSoeg").value.trim()+"\u201d.")]));
+  // Valgte faste materialer: id -> antal. Bevares når der søges på noget andet.
+  const valgte=new Map();
+  const tal=v=>Number(String(v).replace(",","."))||0;
+  function visValgte(){
+    const liste=[...valgte.entries()].map(([id,a])=>{ const m=items.get(id); return m? {m,a} : null; }).filter(Boolean);
+    $("valgteBox").classList.toggle("hidden", liste.length===0);
+    $("valgteTxt").textContent = liste.length? "Valgt: "+liste.map(x=>x.m.navn+" ("+fmtNum(x.a)+" "+(x.m.enhed||"stk")+")").join(", ") : "";
+    $("valgteOk").textContent = "OK – tilføj "+liste.length+(liste.length===1?" materiale":" materialer");
   }
+  function visFasteSoeg(){
+    const box=$("fasteChips");
+    if(document.activeElement && box.contains(document.activeElement) && box.dataset.q===$("fastSoeg").value) { visValgte(); return; }
+    const q=$("fastSoeg").value.trim().toLowerCase(); box.dataset.q=$("fastSoeg").value;
+    for(const id of [...valgte.keys()]) if(!items.has(id)) valgte.delete(id);
+    if(!q){ box.replaceChildren(); visValgte(); return; }
+    const hits=faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+    box.replaceChildren(...(hits.length? hits.map(m=>{
+      const cb=el("input",{type:"checkbox","aria-label":"Vælg "+m.navn,style:"width:26px;height:26px;flex:0 0 auto"}); cb.checked=valgte.has(m.id);
+      const an=el("input",{type:"text",inputmode:"decimal","aria-label":"Antal "+m.navn,style:"width:76px;min-height:44px;text-align:center;flex:0 0 auto"});
+      an.value=String(valgte.has(m.id)? valgte.get(m.id) : (m.antal||1)).replace(".",",");
+      cb.addEventListener("change",()=>{ if(cb.checked) valgte.set(m.id, tal(an.value)||1); else valgte.delete(m.id); visValgte(); });
+      an.addEventListener("input",()=>{ const v=tal(an.value); if(v>0){ valgte.set(m.id,v); cb.checked=true; } visValgte(); });
+      return el("div",{class:"item",style:"gap:8px"},
+        el("label",{style:"display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;cursor:pointer"}, cb, el("span",{style:"overflow-wrap:anywhere"},m.navn)),
+        an, el("span",{class:"muted",style:"flex:0 0 auto;min-width:24px"},m.enhed||"stk"));
+    }) : [el("div",{class:"empty"},"Ingen faste materialer med ”"+$("fastSoeg").value.trim()+"”.")]));
+    visValgte();
+  }
+  $("valgteRyd").addEventListener("click",()=>{ valgte.clear(); $("fasteChips").dataset.q=""; visFasteSoeg(); });
+  $("valgteOk").addEventListener("click", async ()=>{
+    const sagId=$("sagValg").value, dato=$("dato").value||today();
+    if(!sagId){ toast("Vælg en sag"); return; }
+    const liste=[...valgte.entries()].map(([id,a])=>({m:items.get(id),a})).filter(x=>x.m && x.a>0);
+    if(!liste.length){ toast("Vælg mindst ét materiale"); return; }
+    let n=0, t=Date.now();
+    for(const {m,a} of liste){
+      const ok=await save(newId("p"),{kind:"post", sagId, dato, type:"materiale", vare:m.navn, antal:a, enhed:m.enhed||"stk", varenr:m.varenr||"", oprettet:t+(n)});
+      if(ok) n++;
+    }
+    valgte.clear(); $("fastSoeg").value=""; $("fasteChips").dataset.q=""; visFasteSoeg();
+    toast(n===1? "1 materiale gemt" : n+" materialer gemt");
+  });
   $("fastSoeg").addEventListener("input", visFasteSoeg);
   function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderFaste(); renderSager(); renderHjem(); }
 
