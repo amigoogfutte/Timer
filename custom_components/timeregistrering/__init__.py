@@ -332,6 +332,168 @@ class KalenderFeedView(HomeAssistantView):
                             headers={"Cache-Control": "no-store"})
 
 
+# --- Siri / Genveje (bruges fra CarPlay) ---
+
+_TAL_ORD = {
+    "nul": 0, "en": 1, "et": 1, "én": 1, "ét": 1, "to": 2, "tre": 3, "fire": 4, "fem": 5, "seks": 6,
+    "syv": 7, "otte": 8, "ni": 9, "ti": 10, "elleve": 11, "tolv": 12,
+}
+
+
+def _tal(v) -> float | None:
+    """Tolk et antal fra Siri: "2,5", "2.5", "to en halv", "halvanden", "en halv", "3 timer"."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    s = str(v or "").strip().lower().replace("½", " og en halv")
+    if not s:
+        return None
+    if "halvanden" in s:
+        return 1.5
+    m = re.search(r"\d+(?:[.,]\d+)?", s)
+    tal = float(m.group(0).replace(",", ".")) if m else None
+    if tal is None:
+        for ordet in re.findall(r"[a-zæøåé]+", s):
+            if ordet in _TAL_ORD:
+                tal = float(_TAL_ORD[ordet])
+                break
+    halv = bool(re.search(r"\bhalv\b", s))
+    kvart = bool(re.search(r"\bkvart\b", s))
+    if tal is None:
+        return 0.5 if halv else (0.25 if kvart else None)
+    # "en halv" alene = 0,5; "to en halv"/"to og en halv" = 2,5
+    if halv and not m:
+        rest = re.sub(r"\b(en|et|og|halv|time|timer)\b", " ", s).strip()
+        if not rest:
+            return 0.5
+        return tal + 0.5
+    if halv and m and "," not in m.group(0) and "." not in m.group(0):
+        return tal + 0.5
+    if kvart and not m:
+        return tal + 0.25
+    return tal
+
+
+def _fmt(t: float) -> str:
+    return (f"{t:.2f}".rstrip("0").rstrip(".")).replace(".", ",")
+
+
+def _aktive_sager(data: dict[str, dict]) -> list[dict]:
+    """Ikke-afsluttede sager, den senest brugte først."""
+    brugt: dict[str, float] = {}
+    for r in data.values():
+        if r.get("kind") == "post" and not r.get("deleted"):
+            sid = r.get("sagId")
+            brugt[sid] = max(brugt.get(sid, 0), r.get("updated") or 0)
+    sager = [r for r in data.values() if r.get("kind") == "sag" and not r.get("deleted") and not r.get("arkiveret")]
+    sager.sort(key=lambda r: (brugt.get(r.get("id"), 0), r.get("updated") or 0), reverse=True)
+    return sager
+
+
+def _sag_navn(r: dict) -> str:
+    return f"{r.get('nr', '')} {r.get('adresse', '')}".strip()
+
+
+class StemmeSagerView(HomeAssistantView):
+    """GET: liste over åbne sager som tekst, til "Vælg fra liste" i en Genvej."""
+
+    url = "/api/timeregistrering/stemme/sager"
+    name = "api:timeregistrering:stemme:sager"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant, store: Store) -> None:
+        self.hass = hass
+        self.store = store
+
+    async def get(self, request: web.Request) -> web.Response:
+        data = await self.hass.async_add_executor_job(self.store.laes, request["hass_user"].id)
+        return self.json({"sager": [_sag_navn(r) for r in _aktive_sager(data)]})
+
+
+class StemmeView(HomeAssistantView):
+    """POST fra en Genvej: {"sag": "1234 Vejnavn 5", "type": "timer|materiale|note",
+    "timer": "2,5", "tekst": "...", "vare": "...", "antal": "3", "enhed": "stk"}.
+
+    Svarer med {"svar": "..."}, som Genvejen kan læse højt.
+    """
+
+    url = "/api/timeregistrering/stemme"
+    name = "api:timeregistrering:stemme"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant, store: Store) -> None:
+        self.hass = hass
+        self.store = store
+
+    async def post(self, request: web.Request) -> web.Response:
+        import secrets
+        import time
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        body = await request.read()
+        if len(body) > MAX_RECORD_BYTES:
+            return self.json({"svar": "Det var for meget tekst."}, 413)
+        try:
+            obj = json.loads(body or b"{}")
+        except ValueError:
+            return self.json({"svar": "Genvejen sendte noget, jeg ikke forstod."}, 400)
+        if not isinstance(obj, dict):
+            return self.json({"svar": "Genvejen sendte noget, jeg ikke forstod."}, 400)
+
+        user_id = request["hass_user"].id
+        data = await self.hass.async_add_executor_job(self.store.laes, user_id)
+
+        # Find sagen: tag sagsnummeret (første ord) fra det valgte, eller brug den senest brugte.
+        aktive = _aktive_sager(data)
+        valgt = str(obj.get("sag") or "").strip()
+        sag = None
+        if valgt:
+            nr = valgt.split()[0].lower()
+            alle = aktive + [r for r in data.values() if r.get("kind") == "sag" and not r.get("deleted") and r not in aktive]
+            sag = next((r for r in alle if str(r.get("nr", "")).strip().lower() == nr), None)
+            if sag is None:
+                return self.json({"svar": f"Jeg kunne ikke finde sag {valgt}."}, 404)
+        elif aktive:
+            sag = aktive[0]
+        else:
+            return self.json({"svar": "Du har ingen åbne sager i appen."}, 404)
+
+        typ = str(obj.get("type") or "timer").strip().lower()
+        tekst = str(obj.get("tekst") or "").strip()[:2000]
+        tz = ZoneInfo(self.hass.config.time_zone or "Europe/Copenhagen")
+        nu = int(time.time() * 1000)
+        post = {
+            "id": f"p-siri-{nu:x}-{secrets.token_hex(3)}",
+            "kind": "post",
+            "sagId": sag.get("id"),
+            "dato": datetime.now(tz).strftime("%Y-%m-%d"),
+            "oprettet": nu,
+            "updated": nu,
+        }
+        if typ.startswith("tim"):
+            t = _tal(obj.get("timer"))
+            if not t or t <= 0 or t > 24:
+                return self.json({"svar": "Jeg forstod ikke antallet af timer. Prøv igen."}, 400)
+            post.update(type="timer", timer=t, tekst=tekst)
+            svar = f"Gemt: {_fmt(t)} {'time' if t == 1 else 'timer'} på sag {sag.get('nr')}."
+        elif typ.startswith("mat"):
+            vare = str(obj.get("vare") or "").strip()[:200]
+            antal = _tal(obj.get("antal")) or 1
+            enhed = str(obj.get("enhed") or "stk").strip()[:10] or "stk"
+            if not vare:
+                return self.json({"svar": "Jeg fik ikke hvilken vare. Prøv igen."}, 400)
+            post.update(type="materiale", vare=vare, antal=antal, enhed=enhed, varenr="")
+            svar = f"Gemt: {_fmt(antal)} {enhed} {vare} på sag {sag.get('nr')}."
+        else:
+            if not tekst:
+                return self.json({"svar": "Noten var tom. Prøv igen."}, 400)
+            post.update(type="note", tekst=tekst)
+            svar = f"Note gemt på sag {sag.get('nr')}."
+
+        await self.hass.async_add_executor_job(self.store.sync, user_id, [post])
+        return self.json({"svar": svar, "sag": _sag_navn(sag)})
+
+
 class AppRedirectView(HomeAssistantView):
     """Kort adresse: /timer-start → appen."""
 
@@ -353,7 +515,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # HTTP-ruter kan ikke fjernes igen, så de registreres kun én gang pr. opstart.
         await hass.http.async_register_static_paths([StaticPathConfig(APP_URL, str(WWW), False)])
         for view in (SyncView(hass, store), MigView(), IcsView(hass), KalenderLinkView(hass, store),
-                     KalenderFeedView(hass, store), AppRedirectView()):
+                     KalenderFeedView(hass, store), StemmeSagerView(hass, store), StemmeView(hass, store),
+                     AppRedirectView()):
             hass.http.register_view(view)
         data["http_registered"] = True
 
