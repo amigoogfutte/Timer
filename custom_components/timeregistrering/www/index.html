@@ -93,6 +93,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     </header>
     <div class="card">
       <label class="f">Dato<input type="date" id="dato"></label>
+      <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <label class="f">Sag<select id="sagValg"></select></label>
       <div id="ingenSager" class="note hidden">Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.</div>
       <div class="seg" role="group" aria-label="Hvad vil du notere">
@@ -148,11 +149,14 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
       <label class="f">Adresse<input type="text" id="sagAdr" placeholder="Fx Munkemaen 100 A" autocomplete="off" required></label>
+      <label class="f">Boligforening – initialer (valgfrit)<input type="text" id="sagBf" list="bfListe" placeholder="Fx OB" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
+      <datalist id="bfListe"></datalist>
       <label class="f">Beskrivelse (valgfrit)<input type="text" id="sagBesk" placeholder="Fx dørblad udskiftning" autocomplete="off"></label>
       <div class="row"><button type="button" class="btn hidden" id="sagAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="sagSubmit">Tilføj sag</button></div>
     </form>
     <div class="card">
       <h2>Aktive sager</h2>
+      <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <div id="sagListe" class="list"></div>
     </div>
     <form class="card" id="fastForm">
@@ -231,7 +235,23 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const all = kind => [...items.entries()].filter(([,v])=>v.kind===kind).map(([id,v])=>Object.assign({id},v));
   const sager = () => all("sag");
   const sagById = id => { const v=items.get(id); return v && v.kind==="sag" ? Object.assign({id},v) : null; };
-  function sagNavn(s){ return s ? ("Sag "+s.nr+" · "+s.adresse) : "Ukendt sag"; }
+  function sagNavn(s){ return s ? ((s.bf? s.bf+" · ":"")+"Sag "+s.nr+" · "+s.adresse) : "Ukendt sag"; }
+  // Filter på boligforening (initialer). "" = alle. Huskes på enheden.
+  let bfFilter=""; try{ bfFilter=localStorage.getItem("tm_bf")||""; }catch(e){}
+  const bfMatch=s=>!bfFilter || (s.bf||"")===bfFilter;
+  function alleBf(){ return [...new Set(sager().map(s=>s.bf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da")); }
+  function renderBf(){
+    const liste=alleBf();
+    if(bfFilter && !liste.includes(bfFilter)) bfFilter="";
+    $("bfListe").replaceChildren(...liste.map(b=>el("option",{value:b})));
+    document.querySelectorAll(".bfChips").forEach(box=>{
+      box.classList.toggle("hidden", liste.length===0);
+      box.replaceChildren(...["",...liste].map(b=>{
+        const k=el("button",{type:"button","aria-pressed":b===bfFilter?"true":"false"}, b||"Alle");
+        k.addEventListener("click",()=>{ bfFilter=b; try{ localStorage.setItem("tm_bf",b); }catch(e){} renderAll(); });
+        return k; }));
+    });
+  }
 
   // ---------- lager på enheden + synkronisering med Home Assistant ----------
   const HA = location.pathname.startsWith("/timer-app/");
@@ -383,11 +403,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
 
   function renderSagValg(){
     const sel=$("sagValg"); const prev=sel.value;
-    const list=activeSager();
-    sel.replaceChildren(...list.map(s=>el("option",{value:s.id}, s.nr+" · "+s.adresse)));
+    const list=activeSager().filter(bfMatch);
+    sel.replaceChildren(...list.map(s=>el("option",{value:s.id}, (s.bf? s.bf+" · ":"")+s.nr+" · "+s.adresse)));
     if(pendingSel && list.some(s=>s.id===pendingSel)){ sel.value=pendingSel; pendingSel=null; }
     else if(list.some(s=>s.id===prev)) sel.value=prev;
     $("ingenSager").classList.toggle("hidden", list.length>0);
+    if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,"")+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
     $("gem").disabled = list.length===0;
   }
 
@@ -418,7 +439,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       det.addEventListener("toggle",()=>{ det.open? aabneSager.add(sid) : aabneSager.delete(sid); });
       det.append(el("summary",null,
         el("span",{style:"display:flex;align-items:center;min-width:0"}, el("span",{class:"pil","aria-hidden":"true"},"›"),
-          el("span",{style:"overflow-wrap:anywhere"}, s? ("Sag "+s.nr+" · "+s.adresse) : "Ukendt sag")),
+          el("span",{style:"overflow-wrap:anywhere"}, sagNavn(s))),
         el("span",{style:"flex:0 0 auto;font-weight:700"}, fmtNum(sagTimer)+" t")));
       const l=el("div",{class:"list"});
       for(const p of groups[sid]){
@@ -441,16 +462,16 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
 
   function renderSager(){
-    const act=activeSager(), ark=sager().filter(s=>s.arkiveret).sort((a,b)=>(b.oprettet||0)-(a.oprettet||0));
+    const act=activeSager().filter(bfMatch), ark=sager().filter(s=>s.arkiveret && bfMatch(s)).sort((a,b)=>(b.oprettet||0)-(a.oprettet||0));
     const mk=(s,archived)=>el("div",{class:"item"},
-      el("div",{class:"txt"}, el("span",{class:"tag"},"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.besk?el("span",{class:"muted"},s.besk):null),
+      el("div",{class:"txt"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.besk?el("span",{class:"muted"},s.besk):null),
       el("div",{class:"row",style:"flex:0 0 auto"},
         el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret"),
         archived
           ? el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=false; save(s.id,d,"Sag genåbnet"); }},"Genåbn")
           : el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=true; save(s.id,d,"Sag afsluttet"); }},"Afslut"),
         archived ? delBtn(()=>remove(s.id,"Sag slettet"),"Slet sag "+s.nr) : null));
-    $("sagListe").replaceChildren(...(act.length?act.map(s=>mk(s,false)):[el("div",{class:"empty"},"Ingen aktive sager.")]));
+    $("sagListe").replaceChildren(...(act.length?act.map(s=>mk(s,false)):[el("div",{class:"empty"}, bfFilter? "Ingen aktive sager for "+bfFilter+"." : "Ingen aktive sager.")]));
     $("arkivListe").replaceChildren(...(ark.length?ark.map(s=>mk(s,true)):[el("div",{class:"empty"},"Ingen afsluttede sager.")]));
     $("arkivSum").textContent="Afsluttede sager ("+ark.length+")";
   }
@@ -614,7 +635,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const ok=await save(retPakke||newId("pakke"), {kind:"pakke", navn, items:[...pakkeValg]}, retPakke?"Ændring gemt":"Liste oprettet");
     if(ok) slutRetPakke();
   });
-  function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
+  function renderAll(){ renderBf(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
   function setType(t){
@@ -640,7 +661,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const komma=v=>String(v==null?"":v).replace(".",",");
   function startRetSag(id){
     const s=items.get(id); if(!s) return; retSag=id;
-    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||"";
+    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||"";
     $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden");
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
     else $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
@@ -695,17 +716,18 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(ok){ if(retPost) slutRetPost(); else rydPostForm(); }
   });
 
+  const bfVal=()=>$("sagBf").value.trim().toUpperCase().replace(/\s+/g," ");
   $("sagForm").addEventListener("submit", async e=>{
     e.preventDefault();
     const nr=$("sagNr").value.trim(), adr=$("sagAdr").value.trim();
     if(!nr||!adr){ toast("Udfyld sagsnummer og adresse"); return; }
     if(sager().some(s=>s.id!==retSag && s.nr===nr && !s.arkiveret)){ toast("Sag "+nr+" findes allerede"); return; }
     if(retSag){
-      const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim()});
+      const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal()});
       const ok=await save(retSag,d,"Ændring gemt"); if(ok) slutRetSag(); return;
     }
     const id=newId("sag");
-    const ok=await save(id,{kind:"sag", nr, adresse:adr, besk:$("sagBesk").value.trim(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
+    const ok=await save(id,{kind:"sag", nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
     if(ok){ $("sagForm").reset(); pendingSel=id; renderSagValg(); }
   });
 
