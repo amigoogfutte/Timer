@@ -123,7 +123,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <label class="f">Note<textarea id="noteTekst" placeholder="Fx mangler en dør – bestilt hos Stark"></textarea></label>
       </div>
 
-      <button type="button" class="btn primary" id="gem">Gem</button>
+      <div class="row"><button type="button" class="btn hidden" id="annullerRet" style="flex:0 0 auto">Annuller</button><button type="button" class="btn primary" id="gem">Gem</button></div>
     </div>
 
     <div class="card">
@@ -136,11 +136,11 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   <section id="v-sager" data-view class="hidden">
     <header class="top"><h1>Sager</h1></header>
     <form class="card" id="sagForm">
-      <h2>Ny sag</h2>
+      <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
       <label class="f">Adresse<input type="text" id="sagAdr" placeholder="Fx Munkemaen 100 A" autocomplete="off" required></label>
       <label class="f">Beskrivelse (valgfrit)<input type="text" id="sagBesk" placeholder="Fx dørblad udskiftning" autocomplete="off"></label>
-      <button class="btn accent" type="submit">Tilføj sag</button>
+      <div class="row"><button type="button" class="btn hidden" id="sagAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="sagSubmit">Tilføj sag</button></div>
     </form>
     <div class="card">
       <h2>Aktive sager</h2>
@@ -155,7 +155,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <label class="f">Enhed<select id="fastEnhed"><option>stk</option><option>m</option><option>m²</option><option>pk</option><option>l</option><option>kg</option></select></label>
       </div>
       <label class="f">Varenr. (valgfrit)<input type="text" id="fastNr" autocomplete="off"></label>
-      <button class="btn accent" type="submit">Tilføj fast materiale</button>
+      <div class="row"><button type="button" class="btn hidden" id="fastAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="fastSubmit">Tilføj fast materiale</button></div>
       <div id="fastListe" class="list"></div>
     </form>
     <div class="card">
@@ -169,8 +169,6 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     <div class="card">
       <label class="f">Dato<input type="date" id="hjemDato"></label>
       <div class="sum"><span class="muted">Timer i alt</span><span class="big" id="hjemTotal">0</span></div>
-      <button type="button" class="btn" id="kopierDag">Kopiér tekst for hele dagen</button>
-      <pre class="copy hidden" id="dagTekst"></pre>
     </div>
     <div id="hjemKort"></div>
     <div class="card">
@@ -393,7 +391,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       for(const p of groups[sid]){
         l.append(el("div",{class:"item"},
           el("div",{class:"txt"}, el("span",{class:"tag"},typeNavn[p.type]||""), el("span",null,postLine(p))),
-          delBtn(()=>remove(p.id,"Slettet"),"Slet "+(typeNavn[p.type]||"").toLowerCase())));
+          el("div",{class:"row",style:"flex:0 0 auto"},
+            el("button",{type:"button",class:"btn small",onclick:()=>startRetPost(p.id)},"Ret"),
+            delBtn(()=>remove(p.id,"Slettet"),"Slet "+(typeNavn[p.type]||"").toLowerCase()))));
       }
       out.push(l);
     }
@@ -410,6 +410,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const mk=(s,archived)=>el("div",{class:"item"},
       el("div",{class:"txt"}, el("span",{class:"tag"},"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.besk?el("span",{class:"muted"},s.besk):null),
       el("div",{class:"row",style:"flex:0 0 auto"},
+        el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret"),
         archived
           ? el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=false; save(s.id,d,"Sag genåbnet"); }},"Genåbn")
           : el("button",{type:"button",class:"btn small",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=true; save(s.id,d,"Sag afsluttet"); }},"Afslut"),
@@ -431,13 +432,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const dato=$("hjemDato").value;
     const posts=all("post").filter(p=>p.dato===dato);
     const groups={}; for(const p of posts){ (groups[p.sagId]=groups[p.sagId]||[]).push(p); }
-    let total=0; const cards=[]; const tekster=[];
+    let total=0; const cards=[];
     for(const sid in groups){
       const s=sagById(sid); const r=sagTekst(s,groups[sid]); total+=r.timer;
       const doneId="done-"+dato+"-"+sid; const done=items.has(doneId);
       const matLines=Object.entries(r.mat).map(([k,a])=>{ const [v,e,nr]=k.split("|"); return fmtNum(a)+" "+e+" "+v+(nr?" ("+nr+")":""); });
-      const txt=[sagNavn(s), "Timer: "+fmtNum(r.timer), ...(matLines.length?["Materialer:",...matLines.map(m=>"  "+m)]:[]), ...(r.noter.length?["Note: "+r.noter.join(". ")]:[])].join("\n");
-      tekster.push(txt);
+      const txt=r.noter.join("\n");
       const pre=el("pre",{class:"copy"},txt);
       const cb=el("input",{type:"checkbox"}); cb.checked=done;
       cb.addEventListener("change",()=>{ if(cb.checked) save(doneId,{kind:"done",dato,sagId:sid,oprettet:Date.now()},"Markeret som indtastet"); else remove(doneId,"Markering fjernet"); });
@@ -446,15 +446,13 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         el("div",{class:"sum"}, el("span",{class:"muted"},"Timer"), el("span",{class:"big"},fmtNum(r.timer))),
         matLines.length? el("div",null, el("div",{class:"muted"},"Materialer"), ...matLines.map(m=>el("div",null,m))) : el("div",{class:"muted"},"Ingen materialer"),
         r.noter.length? el("div",null, el("div",{class:"muted"},"Noter"), ...r.noter.map(n=>el("div",null,n))) : null,
-        el("details",null, el("summary",null,"Vis som tekst"), pre),
+        r.noter.length? el("details",{class:"hidden"}, el("summary",null,"Tekst"), pre) : null,
         el("div",{class:"row"},
-          el("button",{type:"button",class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(txt); toast("Kopieret"); }catch(e){ pre.parentElement.open=true; const rg=document.createRange(); rg.selectNodeContents(pre); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(rg); toast("Markeret – kopiér selv"); } }},"Kopiér tekst"),
+          el("button",{type:"button",class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(txt); toast("Kopieret"); }catch(e){ pre.parentElement.classList.remove("hidden"); pre.parentElement.open=true; const rg=document.createRange(); rg.selectNodeContents(pre); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(rg); toast("Markeret – kopiér selv"); } }, ...(r.noter.length?{}:{disabled:""})},"Kopiér tekst"),
           el("label",{class:"check"}, cb, "Indtastet i Mobilplan"))
       ));
     }
     $("hjemTotal").textContent=fmtNum(total);
-    dagensTekst = fmtDato(dato)+" – "+fmtNum(total)+" timer i alt\n\n"+tekster.join("\n\n");
-    $("kopierDag").disabled = !tekster.length;
     $("hjemKort").replaceChildren(...(cards.length?cards:[el("div",{class:"card"},el("div",{class:"empty"},"Intet noteret denne dag."))]));
 
     // days not fully entered
@@ -474,14 +472,10 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       $("antal").focus(); $("antal").select && $("antal").select(); }}, m.navn)));
     $("fastListe").replaceChildren(...(f.length? f.map(m=>el("div",{class:"item"},
       el("div",{class:"txt"}, el("span",{style:"font-weight:600"},m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")+(m.varenr?" · varenr. "+m.varenr:""))),
-      delBtn(()=>remove(m.id,"Fjernet"),"Fjern "+m.navn))) : [el("div",{class:"empty"},"Ingen faste materialer endnu.")]));
+      el("div",{class:"row",style:"flex:0 0 auto"},
+        el("button",{type:"button",class:"btn small",onclick:()=>startRetFast(m.id)},"Ret"),
+        delBtn(()=>remove(m.id,"Fjernet"),"Fjern "+m.navn)))) : [el("div",{class:"empty"},"Ingen faste materialer endnu.")]));
   }
-  let dagensTekst="";
-  $("kopierDag").addEventListener("click", async ()=>{
-    const pre=$("dagTekst");
-    try{ await navigator.clipboard.writeText(dagensTekst); pre.classList.add("hidden"); toast("Kopieret"); }
-    catch(e){ pre.textContent=dagensTekst; pre.classList.remove("hidden"); const rg=document.createRange(); rg.selectNodeContents(pre); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(rg); toast("Markeret – kopiér selv"); }
-  });
   function renderAll(){ renderSagValg(); renderDag(); renderVarer(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
@@ -503,32 +497,74 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   $("timer").addEventListener("input",()=>{ const v=tv(); const h=Math.floor(v), m=Math.round((v-h)*60); $("timerTxt").textContent=(h? h+(h===1?" time":" timer"):"")+(h&&m?" ":"")+(m? m+" min":"") || "0 timer"; });
   document.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>visTimer(Number(b.dataset.t))));
 
+  // ---------- rette ----------
+  let retSag=null, retFast=null, retPost=null;
+  const komma=v=>String(v==null?"":v).replace(".",",");
+  function startRetSag(id){
+    const s=items.get(id); if(!s) return; retSag=id;
+    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||"";
+    $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden");
+    $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function slutRetSag(){ retSag=null; $("sagForm").reset(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
+  $("sagAnnuller").addEventListener("click", slutRetSag);
+
+  function startRetFast(id){
+    const m=items.get(id); if(!m) return; retFast=id;
+    $("fastNavn").value=m.navn||""; $("fastAntal").value=komma(m.antal||1); $("fastEnhed").value=m.enhed||"stk"; $("fastNr").value=m.varenr||"";
+    $("fastSubmit").textContent="Gem ændringer"; $("fastAnnuller").classList.remove("hidden");
+    $("fastForm").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function slutRetFast(){ retFast=null; $("fastNavn").value=""; $("fastAntal").value="1"; $("fastNr").value=""; $("fastSubmit").textContent="Tilføj fast materiale"; $("fastAnnuller").classList.add("hidden"); }
+  $("fastAnnuller").addEventListener("click", slutRetFast);
+
+  function startRetPost(id){
+    const p=items.get(id); if(!p) return;
+    const sel=$("sagValg");
+    if(![...sel.options].some(o=>o.value===p.sagId)){ const s=sagById(p.sagId); sel.append(el("option",{value:p.sagId}, s? s.nr+" · "+s.adresse+" (afsluttet)" : "Ukendt sag")); }
+    retPost=id; sel.value=p.sagId; $("dato").value=p.dato; setType(p.type);
+    if(p.type==="timer"){ visTimer(Number(p.timer)||0); $("timerTekst").value=p.tekst||""; }
+    else if(p.type==="materiale"){ $("vare").value=p.vare||""; $("antal").value=komma(p.antal); $("enhed").value=p.enhed||"stk"; $("varenr").value=p.varenr||""; }
+    else { $("noteTekst").value=p.tekst||""; }
+    $("gem").textContent="Gem ændring"; $("annullerRet").classList.remove("hidden");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  function rydPostForm(){ $("timerTekst").value=""; $("vare").value=""; $("antal").value="1"; $("varenr").value=""; $("noteTekst").value=""; }
+  function slutRetPost(){ retPost=null; rydPostForm(); $("gem").textContent="Gem"; $("annullerRet").classList.add("hidden"); renderSagValg(); }
+  $("annullerRet").addEventListener("click", slutRetPost);
+
   $("fastForm").addEventListener("submit", async e=>{
     e.preventDefault();
     const navn=$("fastNavn").value.trim(); if(!navn){ toast("Skriv et navn"); return; }
-    if(faste().some(m=>m.navn.toLowerCase()===navn.toLowerCase())){ toast("Findes allerede"); return; }
+    if(faste().some(m=>m.id!==retFast && m.navn.toLowerCase()===navn.toLowerCase())){ toast("Findes allerede"); return; }
     const antal=Number(String($("fastAntal").value).replace(",","."))||1;
-    const ok=await save(newId("fast"),{kind:"fast", navn, antal, enhed:$("fastEnhed").value, varenr:$("fastNr").value.trim()},"Fast materiale tilføjet");
-    if(ok){ $("fastNavn").value=""; $("fastAntal").value="1"; $("fastNr").value=""; }
+    const id=retFast||newId("fast");
+    const ok=await save(id,{kind:"fast", navn, antal, enhed:$("fastEnhed").value, varenr:$("fastNr").value.trim()}, retFast?"Ændring gemt":"Fast materiale tilføjet");
+    if(ok) slutRetFast();
   });
 
   $("gem").addEventListener("click", async ()=>{
     const sagId=$("sagValg").value, dato=$("dato").value||today();
     if(!sagId){ toast("Vælg en sag"); return; }
-    const base={kind:"post", sagId, dato, type:currentType, oprettet:Date.now()};
+    const gammel=retPost? items.get(retPost) : null;
+    const base={kind:"post", sagId, dato, type:currentType, oprettet: gammel? (gammel.oprettet||Date.now()) : Date.now()};
     let d;
     if(currentType==="timer"){ const t=tv(); if(!t){ toast("Skriv antal timer"); return; } d=Object.assign(base,{timer:t, tekst:$("timerTekst").value.trim()}); }
     else if(currentType==="materiale"){ const v=$("vare").value.trim(); const a=Number(String($("antal").value).replace(",",".")); if(!v){ toast("Skriv en vare"); return; } if(!a){ toast("Skriv et antal"); return; } d=Object.assign(base,{vare:v, antal:a, enhed:$("enhed").value, varenr:$("varenr").value.trim()}); }
     else { const n=$("noteTekst").value.trim(); if(!n){ toast("Skriv en note"); return; } d=Object.assign(base,{tekst:n}); }
-    const ok=await save(newId("p"), d, "Gemt");
-    if(ok){ $("timerTekst").value=""; $("vare").value=""; $("antal").value="1"; $("varenr").value=""; $("noteTekst").value=""; }
+    const ok=await save(retPost||newId("p"), d, retPost?"Ændring gemt":"Gemt");
+    if(ok){ if(retPost) slutRetPost(); else rydPostForm(); }
   });
 
   $("sagForm").addEventListener("submit", async e=>{
     e.preventDefault();
     const nr=$("sagNr").value.trim(), adr=$("sagAdr").value.trim();
     if(!nr||!adr){ toast("Udfyld sagsnummer og adresse"); return; }
-    if(sager().some(s=>s.nr===nr && !s.arkiveret)){ toast("Sag "+nr+" findes allerede"); return; }
+    if(sager().some(s=>s.id!==retSag && s.nr===nr && !s.arkiveret)){ toast("Sag "+nr+" findes allerede"); return; }
+    if(retSag){
+      const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim()});
+      const ok=await save(retSag,d,"Ændring gemt"); if(ok) slutRetSag(); return;
+    }
     const id=newId("sag");
     const ok=await save(id,{kind:"sag", nr, adresse:adr, besk:$("sagBesk").value.trim(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
     if(ok){ $("sagForm").reset(); pendingSel=id; renderSagValg(); }
