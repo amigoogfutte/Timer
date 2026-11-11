@@ -127,6 +127,92 @@ class MigView(HomeAssistantView):
         return self.json({"id": u.id, "navn": u.name})
 
 
+def _ics_tekst(v: str) -> str:
+    """Escape tekst til iCalendar."""
+    return (v or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
+
+
+def _ics_fold(linje: str) -> str:
+    """Fold lange linjer (75 bytes) som iCalendar kræver."""
+    b = linje.encode("utf-8")
+    if len(b) <= 75:
+        return linje
+    dele, cur = [], b""
+    for ch in linje:
+        e = ch.encode("utf-8")
+        if len(cur) + len(e) > (75 if not dele else 74):
+            dele.append(cur.decode("utf-8"))
+            cur = b""
+        cur += e
+    dele.append(cur.decode("utf-8"))
+    return "\r\n ".join(dele)
+
+
+class IcsView(HomeAssistantView):
+    """Laver en kalenderfil (.ics) for én aftale ud fra adressens parametre.
+
+    Gemmer ingenting. Bruges af knappen "Læg i kalender", som iPhone åbner som en ny kalenderbegivenhed.
+    """
+
+    url = "/api/timeregistrering/ics"
+    name = "api:timeregistrering:ics"
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(self, request: web.Request) -> web.Response:
+        from datetime import datetime, timedelta, timezone
+        from zoneinfo import ZoneInfo
+
+        # Alt kommer som base64url-kodet JSON i ?d=..., fordi Home Assistant afviser linjeskift i adresser.
+        import base64
+
+        q = dict(request.query)
+        if "d" in q:
+            try:
+                raw = q["d"] + "=" * (-len(q["d"]) % 4)
+                obj = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
+                if isinstance(obj, dict):
+                    q = {k: str(v) for k, v in obj.items()}
+            except (ValueError, UnicodeDecodeError):
+                return web.Response(status=400, text="Ugyldige data")
+        titel = q.get("t", "Aftale")[:200]
+        sted = q.get("l", "")[:300]
+        note = q.get("n", "")[:2000]
+        uid = re.sub(r"[^A-Za-z0-9_.:-]", "", q.get("u", ""))[:120] or "aftale"
+        try:
+            start = datetime.strptime(q.get("s", ""), "%Y%m%dT%H%M%S")
+            minutter = max(15, min(int(q.get("d", "60")), 24 * 60))
+        except ValueError:
+            return web.Response(status=400, text="Ugyldig dato")
+        tz = ZoneInfo(self.hass.config.time_zone or "Europe/Copenhagen")
+        start_utc = start.replace(tzinfo=tz).astimezone(timezone.utc)
+        slut_utc = start_utc + timedelta(minutes=minutter)
+        fmt = "%Y%m%dT%H%M%SZ"
+        linjer = [
+            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Timer og materialer//DA", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+            "BEGIN:VEVENT",
+            f"UID:{uid}@timeregistrering",
+            f"DTSTAMP:{datetime.now(timezone.utc).strftime(fmt)}",
+            f"DTSTART:{start_utc.strftime(fmt)}",
+            f"DTEND:{slut_utc.strftime(fmt)}",
+            f"SUMMARY:{_ics_tekst(titel)}",
+        ]
+        if sted:
+            linjer.append(f"LOCATION:{_ics_tekst(sted)}")
+        if note:
+            linjer.append(f"DESCRIPTION:{_ics_tekst(note)}")
+        linjer += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Aftale", "TRIGGER:-PT30M", "END:VALARM", "END:VEVENT", "END:VCALENDAR"]
+        body = "\r\n".join(_ics_fold(l) for l in linjer) + "\r\n"
+        return web.Response(
+            body=body.encode("utf-8"),
+            content_type="text/calendar",
+            charset="utf-8",
+            headers={"Content-Disposition": 'inline; filename="aftale.ics"', "Cache-Control": "no-store"},
+        )
+
+
 class AppRedirectView(HomeAssistantView):
     """Kort adresse: /timer-start → appen."""
 
@@ -147,7 +233,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not data.get("http_registered"):
         # HTTP-ruter kan ikke fjernes igen, så de registreres kun én gang pr. opstart.
         await hass.http.async_register_static_paths([StaticPathConfig(APP_URL, str(WWW), False)])
-        for view in (SyncView(hass, store), MigView(), AppRedirectView()):
+        for view in (SyncView(hass, store), MigView(), IcsView(hass), AppRedirectView()):
             hass.http.register_view(view)
         data["http_registered"] = True
 
