@@ -203,6 +203,10 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <a href="#aftaler" class="h-link">Aftaler</a>
       <a href="#afsluttede" class="h-link">Afsluttede</a>
     </nav>
+    <div class="card" id="soegKort" style="gap:8px">
+      <label class="f">Søg i alle sager<input type="search" id="sagSoeg" placeholder="Sagsnummer, adresse, forening eller beskrivelse" autocomplete="off"></label>
+      <div id="sagSoegListe" class="list"></div>
+    </div>
     <form class="card sek sek-ny" id="sagForm">
       <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
@@ -575,7 +579,17 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("sagListe").replaceChildren(...(act.length?act.map(s=>mk(s,false)):[el("div",{class:"empty"}, bfFilter? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening." : "Ingen aktive sager for "+bfFilter+".") : "Ingen aktive sager.")]));
     $("arkivListe").replaceChildren(...(ark.length?ark.map(s=>mk(s,true)):[el("div",{class:"empty"},"Ingen afsluttede sager.")]));
     $("arkivSum").textContent="Afsluttede sager ("+ark.length+")";
+    // Søgning: både aktive og afsluttede, uanset filter
+    const q=$("sagSoeg").value.trim().toLowerCase();
+    const box=$("sagSoegListe");
+    if(!q){ box.replaceChildren(); return; }
+    const ord=q.split(/\s+/);
+    const hits=sager().filter(s=>{ const t=[s.nr,s.adresse,s.bf,s.besk].join(" ").toLowerCase(); return ord.every(o=>t.includes(o)); })
+      .sort((a,b)=>(a.arkiveret?1:0)-(b.arkiveret?1:0) || (b.oprettet||0)-(a.oprettet||0));
+    box.replaceChildren(el("div",{class:"muted"}, hits.length? hits.length+(hits.length===1?" sag fundet":" sager fundet") : "Ingen sager matcher."),
+      ...hits.map(s=>{ const r=mk(s,!!s.arkiveret); if(s.arkiveret){ const t=r.querySelector(".tag"); t.textContent+=" · Afsluttet"; t.style.color="#6E520C"; } return r; }));
   }
+  $("sagSoeg").addEventListener("input", ()=>renderSager());
 
   function sagTekst(s, ps){
     const t=ps.filter(p=>p.type==="timer");
