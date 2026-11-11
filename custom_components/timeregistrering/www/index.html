@@ -250,7 +250,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     document.querySelectorAll(".bfChips").forEach(box=>{
       box.classList.toggle("hidden", liste.length===0);
       box.replaceChildren(...["",...liste,ANDRE].map(b=>{
-        const k=el("button",{type:"button","aria-pressed":b===bfFilter?"true":"false"}, b===ANDRE? "Andre" : (b||"Alle"));
+        const k=el("button",{type:"button","aria-pressed":b===bfFilter?"true":"false",title:b===ANDRE?"Sager uden boligforening":(b||"Alle sager"),"aria-label":b===ANDRE?"Andre":(b||"Alle")}, b===ANDRE? "Andre" : (b? b.slice(0,3) : "Alle"));
         k.addEventListener("click",()=>{ bfFilter=b; try{ localStorage.setItem("tm_bf",b); }catch(e){} renderAll(); });
         return k; }));
     });
