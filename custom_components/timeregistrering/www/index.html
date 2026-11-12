@@ -143,7 +143,11 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     <div class="card">
       <label class="f">Dato<input type="date" id="dato"></label>
       <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
-      <label class="f">Sag<select id="sagValg"></select></label>
+      <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;color:var(--muted)">Sag
+        <select id="sagValg" class="sr" tabindex="-1" aria-hidden="true"></select>
+        <button type="button" id="sagKort" class="btn" style="text-align:left;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;min-height:56px;color:var(--ink)"><span id="sagKortTxt" style="overflow-wrap:anywhere;white-space:normal"></span><span aria-hidden="true" style="color:var(--muted)">▾</span></button>
+        <div id="sagVaelger" class="hidden list" style="border:1px solid var(--line);border-radius:12px;padding:4px 10px;max-height:360px;overflow:auto;background:#fff"></div>
+      </div>
       <details id="sagInfo" class="hidden" style="margin-top:-4px"><summary style="min-height:36px;font-size:14px;color:var(--accent)">Vis hvad der står på sagen</summary><div id="sagInfoTxt" style="font-size:14px;white-space:pre-wrap;padding:4px 0 6px"></div></details>
       <div id="dagensAftaler" class="hidden" style="background:#E5F2EC;color:#17583F;border-radius:12px;padding:8px 12px"></div>
       <div id="ingenSager" class="note hidden">Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.</div>
@@ -496,6 +500,15 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const d=Object.assign({},s,{aftale:Object.assign({},s.aftale,{fuldfort:val})});
     await save(id,d, val? "Aftale fuldført" : "Aftale åbnet igen");
   }
+  function visSagKort(){
+    const sel=$("sagValg"); const o=sel.selectedOptions[0];
+    $("sagKortTxt").textContent = o? o.textContent : "Vælg sag";
+    const box=$("sagVaelger");
+    box.replaceChildren(...[...sel.options].map(op=>{
+      const b=el("button",{type:"button",class:"item",style:"width:100%;text-align:left;background:"+(op.value===sel.value?"var(--soft)":"transparent")+";border:none;border-top:1px solid var(--soft);padding:10px 4px;font:inherit;font-size:15px;color:var(--ink);cursor:pointer;white-space:normal;overflow-wrap:anywhere;min-height:44px"}, op.textContent);
+      b.addEventListener("click",()=>{ sel.value=op.value; box.classList.add("hidden"); sel.dispatchEvent(new Event("change")); visSagKort(); });
+      return b; }));
+  }
   function visSagInfo(){
     const s=sagById($("sagValg").value), box=$("sagInfo");
     if(!s){ box.classList.add("hidden"); return; }
@@ -528,7 +541,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
             el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret sag"),
             el("button",{type:"button",class:"btn small accent",onclick:()=>fuldfoert(s.id,true)},"Fuldført"))));
       return d; })] : []));
-    visSagInfo();
+    visSagInfo(); visSagKort();
     $("ingenSager").classList.toggle("hidden", list.length>0);
     if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening" : "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,""))+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
     $("gem").disabled = list.length===0;
@@ -999,7 +1012,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   });
 
   $("dato").addEventListener("change", ()=>{ renderSagValg(); renderDag(); });
-  $("sagValg").addEventListener("change", visSagInfo);
+  $("sagValg").addEventListener("change", ()=>{ visSagInfo(); visSagKort(); });
+  $("sagKort").addEventListener("click", ()=>{ visSagKort(); $("sagVaelger").classList.toggle("hidden"); });
   $("hjemDato").addEventListener("change", renderHjem);
   window.addEventListener("hashchange", showView);
 
