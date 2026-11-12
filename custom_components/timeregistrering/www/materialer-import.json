@@ -1,5 +1,57 @@
 [
 {
+"varenr": "100",
+"navn": "ny vare - METER - skriv i Kommentar felt",
+"enhed": "m"
+},
+{
+"varenr": "101",
+"navn": "ny vare - M2 - skriv i Kommentar felt",
+"enhed": "m²"
+},
+{
+"varenr": "102",
+"navn": "ny vare - PAKKE - skriv i Kommentar felt",
+"enhed": "pk"
+},
+{
+"varenr": "103",
+"navn": "ny vare - RULLE - skriv i Kommentar felt"
+},
+{
+"varenr": "104",
+"navn": "ny vare - POSER - skriv i Kommentar felt"
+},
+{
+"varenr": "105",
+"navn": "ny vare - M3 - skriv i Kommentar felt"
+},
+{
+"varenr": "106",
+"navn": "ny vare - ENHED - skriv i Kommentar felt"
+},
+{
+"varenr": "107",
+"navn": "ny vare - KILO - skriv i Kommentar felt",
+"enhed": "kg"
+},
+{
+"varenr": "109",
+"navn": "ny vare - DAG - skriv i Kommentar felt"
+},
+{
+"varenr": "201",
+"navn": "Følgeseddel - Davidsen - skriv Davidsens SAGSNR i feltet kommentar"
+},
+{
+"varenr": "210",
+"navn": "Følgeseddel - Lås DK - skriv lev ordrenr i feltet kommentar"
+},
+{
+"varenr": "211",
+"navn": "Følgeseddel - Centrum Beslag - skriv lev ordre nr i feltet kommentar"
+},
+{
 "varenr": "212",
 "navn": "Følgeseddel - HTH - skriv lev ordrenr i feltet kommentar"
 },

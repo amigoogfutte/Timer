@@ -584,9 +584,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const q=$("sagSoeg").value.trim().toLowerCase();
     const box=$("sagSoegListe");
     if(!q){ box.replaceChildren(); return; }
-    const ord=q.split(/\s+/);
-    const hits=sager().filter(s=>{ const t=[s.nr,s.adresse,s.bf,s.besk].join(" ").toLowerCase(); return ord.every(o=>t.includes(o)); })
-      .sort((a,b)=>(a.arkiveret?1:0)-(b.arkiveret?1:0) || (b.oprettet||0)-(a.oprettet||0));
+    const hits=sager().map(x=>({x,sc:soegScore([x.nr,x.adresse,x.bf,x.besk],q)})).filter(r=>r.sc>0)
+      .sort((a,b)=>b.sc-a.sc || (a.x.arkiveret?1:0)-(b.x.arkiveret?1:0) || (b.x.oprettet||0)-(a.x.oprettet||0)).map(r=>r.x);
     box.replaceChildren(el("div",{class:"muted"}, hits.length? hits.length+(hits.length===1?" sag fundet":" sager fundet") : "Ingen sager matcher."),
       ...hits.map(s=>{ const r=mk(s,!!s.arkiveret); if(s.arkiveret){ const t=r.querySelector(".tag"); t.textContent+=" · Afsluttet"; t.style.color="#6E520C"; } return r; }));
   }
@@ -667,7 +666,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("pakkeChips").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.id===aktivPakke?"true":"false"));
     if(!q && !pk){ box.replaceChildren(); visValgte(); return; }
     const hits= pk ? (pk.items||[]).map(id=>Object.assign({id},items.get(id)||{})).filter(m=>m.kind==="fast").sort((a,b)=>a.navn.localeCompare(b.navn,"da"))
-                   : faste().filter(m=>(m.navn||"").toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+                   : soeg(faste(), q, m=>[m.varenr,m.navn]);
     box.replaceChildren(...(hits.length? hits.map(m=>{
       const cb=el("input",{type:"checkbox","aria-label":"Vælg "+m.navn,style:"width:26px;height:26px;flex:0 0 auto"}); cb.checked=valgte.has(m.id);
       const an=el("input",{type:"text",inputmode:"decimal","aria-label":"Antal "+m.navn,style:"width:76px;min-height:44px;text-align:center;flex:0 0 auto"});
@@ -675,7 +674,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       cb.addEventListener("change",()=>{ if(cb.checked) valgte.set(m.id, tal(an.value)||1); else valgte.delete(m.id); visValgte(); });
       an.addEventListener("input",()=>{ const v=tal(an.value); if(v>0){ valgte.set(m.id,v); cb.checked=true; } visValgte(); });
       return el("div",{class:"item",style:"gap:8px"},
-        el("label",{style:"display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;cursor:pointer"}, cb, el("span",{style:"overflow-wrap:anywhere"},m.navn)),
+        el("label",{style:"display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;cursor:pointer"}, cb, el("span",{style:"overflow-wrap:anywhere"}, m.varenr? el("span",{class:"muted",style:"font-weight:600"},m.varenr+" · ") : null, m.navn)),
         an, el("span",{class:"muted",style:"flex:0 0 auto;min-width:24px"},m.enhed||"stk"));
     }) : [el("div",{class:"empty"}, pk? "Listen er tom." : "Ingen faste materialer med ”"+$("fastSoeg").value.trim()+"”.")]));
     if(pk) box.prepend(el("div",{class:"muted",style:"font-weight:600"}, pk.navn+" – sæt flueben ved det, du har brugt"));
@@ -724,7 +723,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     box.dataset.q=$("pakkeSoeg").value;
     const q=$("pakkeSoeg").value.trim().toLowerCase();
     for(const id of [...pakkeValg]) if(!items.has(id)) pakkeValg.delete(id);
-    const f=faste().filter(m=>!q || m.navn.toLowerCase().includes(q) || (m.varenr||"").toLowerCase().includes(q));
+    const f= q ? soeg(faste(), q, m=>[m.varenr,m.navn]) : faste();
     box.replaceChildren(...(f.length? f.map(m=>{
       const cb=el("input",{type:"checkbox",style:"width:24px;height:24px;flex:0 0 auto"}); cb.checked=pakkeValg.has(m.id);
       cb.addEventListener("change",()=>{ cb.checked? pakkeValg.add(m.id) : pakkeValg.delete(m.id); $("pakkeAntal").textContent=pakkeValg.size+" valgt"; });
@@ -827,6 +826,25 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     persist(); rebuild(); renderAll(); scheduleSync(500);
     toast(nye.length+" materialer lagt ind");
   });
+  // Søgning: hvert ord skal findes samlet (fx "211" som 211, ikke 2 og 11).
+  // Flere ord ("hej find") søger efter hvert ord; dem der matcher flest ord kommer først,
+  // og et præcist nummer (varenr/sagsnr) kommer øverst.
+  function soegScore(felter, q){
+    const ord=q.toLowerCase().split(/\s+/).filter(Boolean); if(!ord.length) return 0;
+    const tekst=felter.filter(Boolean).join(" ").toLowerCase();
+    const nummer=String(felter[0]||"").toLowerCase();
+    let ramt=0, bonus=0;
+    for(const o of ord){
+      if(tekst.includes(o)){ ramt++;
+        if(nummer===o) bonus+=100; else if(nummer.startsWith(o)) bonus+=20;
+        if(new RegExp("(^|[^0-9a-zæøå])"+o.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^0-9a-zæøå])").test(tekst)) bonus+=5;
+      }
+    }
+    return ramt? ramt*1000+bonus : 0;
+  }
+  function soeg(liste, q, felter){
+    return liste.map(x=>({x,sc:soegScore(felter(x),q)})).filter(r=>r.sc>0).sort((a,b)=>b.sc-a.sc).map(r=>r.x);
+  }
   function renderAll(){ visImport(); renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
