@@ -681,7 +681,13 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         r.noter.length? el("details",{class:"hidden"}, el("summary",null,"Tekst"), pre) : null,
         el("div",{class:"row"},
           el("button",{type:"button",class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(txt); toast("Kopieret"); }catch(e){ pre.parentElement.classList.remove("hidden"); pre.parentElement.open=true; const rg=document.createRange(); rg.selectNodeContents(pre); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(rg); toast("Markeret – kopiér selv"); } }, ...(r.noter.length?{}:{disabled:""})},"Kopiér tekst"),
-          el("label",{class:"check"}, cb, "Indtastet i Mobilplan"))
+          el("label",{class:"check"}, cb, "Indtastet i Mobilplan")),
+        s? (s.arkiveret
+          ? el("button",{type:"button",class:"btn",onclick:()=>{ const d=Object.assign({},items.get(s.id)); d.arkiveret=false; save(s.id,d,"Sag genåbnet"); }},"Genåbn sag (afsluttet)")
+          : (()=>{ const b=el("button",{type:"button",class:"btn",style:"border-color:#EEDDB0;background:#FBF5E8;color:#6E520C"},"Afslut sag"); let armed=false,t;
+              b.addEventListener("click",()=>{ if(!armed){ armed=true; b.textContent="Tryk igen for at afslutte sag "+s.nr; t=setTimeout(()=>{armed=false;b.textContent="Afslut sag";},3000); return; }
+                clearTimeout(t); const d=Object.assign({},items.get(s.id)); d.arkiveret=true; save(s.id,d,"Sag "+s.nr+" afsluttet"); });
+              return b; })()) : null
       ));
     }
     $("hjemTotal").textContent=fmtNum(total);
