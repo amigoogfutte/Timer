@@ -130,7 +130,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v0.9.7</span>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v0.9.8</span>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -375,14 +375,19 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const CLIENT_ID = APP_BASE, REDIRECT_URI = APP_BASE + "index.html";
   const authGet=()=>{ try{ return JSON.parse(localStorage.getItem("tm_auth")||"null"); }catch(e){ return null; } };
   const authSet=a=>{ try{ a?localStorage.setItem("tm_auth",JSON.stringify(a)):localStorage.removeItem("tm_auth"); }catch(e){} };
+  // fetch med tidsgrænse, så en afbrudt forbindelse ikke hænger for evigt
+  function fetchT(url, opts, ms){
+    const ac=new AbortController(); const t=setTimeout(()=>ac.abort(), ms||20000);
+    return fetch(url, Object.assign({}, opts||{}, {signal:ac.signal})).finally(()=>clearTimeout(t));
+  }
   async function tokenRequest(params){
-    const r=await fetch("/auth/token",{method:"POST",body:new URLSearchParams(params)});
+    const r=await fetchT("/auth/token",{method:"POST",body:new URLSearchParams(params)});
     if(!r.ok){ const e=new Error("auth "+r.status); e.status=r.status; throw e; }
     const j=await r.json();
     return {access_token:j.access_token, refresh_token:j.refresh_token||params.refresh_token, expires:Date.now()+(j.expires_in||1800)*1000, clientId:params.client_id};
   }
   async function parentToken(){
-    try{ if(!inFrame) return null; const ha=window.parent.document.querySelector("home-assistant"); const a=ha&&ha.hass&&ha.hass.auth; if(!a) return null; if(a.expired) await a.refreshAccessToken(); return a.accessToken||null; }catch(e){ return null; }
+    try{ if(!inFrame) return null; const ha=window.parent.document.querySelector("home-assistant"); const a=ha&&ha.hass&&ha.hass.auth; if(!a) return null; if(a.expired) await Promise.race([a.refreshAccessToken(), new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),15000))]); return a.accessToken||null; }catch(e){ return null; }
   }
   async function getToken(force){
     const pt=await parentToken(); if(pt) return pt;
@@ -408,7 +413,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   async function api(path,opts={},retried){
     const t=await getToken(retried);
     if(!t){ const e=new Error("login"); e.login=true; throw e; }
-    const r=await fetch("/api/timeregistrering/"+path,Object.assign({},opts,{headers:Object.assign({},opts.headers||{},{Authorization:"Bearer "+t})}));
+    const r=await fetchT("/api/timeregistrering/"+path,Object.assign({},opts,{headers:Object.assign({},opts.headers||{},{Authorization:"Bearer "+t})}));
     if(r.status===401 && !retried) return api(path,opts,true);
     if(r.status===401){ authSet(null); const e=new Error("login"); e.login=true; throw e; }
     if(r.status===404){ const e=new Error("mangler"); e.missing=true; throw e; }
@@ -417,7 +422,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
 
   // --- synkronisering ---
   let syncState={status:HA?"idle":"off", last:+(localStorage.getItem("tm_lastSync")||0), msg:""};
-  let syncing=false, syncAgain=false, syncTimer=null;
+  let syncing=false, syncAgain=false, syncTimer=null, syncStart=0, syncTur=0;
   function syncText(){
     const t=syncState.last? new Date(syncState.last).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"}) : "";
     const n=db.dirty.length;
@@ -434,9 +439,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function drawSync(){ const b=$("syncBar"); if(!HA){ b.classList.add("hidden"); return; } const [cls,txt]=syncText(); b.className=cls; b.textContent=txt; }
   async function sync(){
     if(!HA) return;
-    if(syncing){ syncAgain=true; return; }
+    if(syncing && Date.now()-syncStart<30000){ syncAgain=true; return; }
     if(!navigator.onLine){ setSync("offline"); return; }
-    syncing=true; setSync("busy");
+    syncing=true; syncStart=Date.now(); const minTur=++syncTur; setSync("busy");
     try{
       const sent={}; const poster=[];
       for(const id of db.dirty){ const r=db.records[id]; if(r){ sent[id]=r.updated; poster.push(r); } }
@@ -453,15 +458,15 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       persist();
       if(changed){ rebuild(); renderAll(); }
       syncState.last=Date.now(); try{ localStorage.setItem("tm_lastSync",String(syncState.last)); }catch(e){}
-      setSync("ok");
-      if(!kalLink()) hentKalLink();
+      if(minTur===syncTur){ setSync("ok"); if(!kalLink()) hentKalLink(); }
     }catch(e){
-      if(e.login) setSync("login");
+      if(minTur!==syncTur) return;
+      if(e.name==="AbortError") setSync("error","Serveren svarede ikke i tide");
+      else if(e.login) setSync("login");
       else if(e.missing) setSync("error","Serveren svarer ikke");
       else setSync(navigator.onLine?"error":"offline", navigator.onLine?"Kunne ikke synkronisere":"");
     }finally{
-      syncing=false;
-      if(syncAgain){ syncAgain=false; scheduleSync(500); }
+      if(minTur===syncTur){ syncing=false; if(syncAgain){ syncAgain=false; scheduleSync(500); } }
     }
   }
   function scheduleSync(ms){ if(!HA) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,ms); drawSync(); }
