@@ -144,7 +144,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="f">Dato<input type="date" id="dato"></label>
       <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <label class="f">Sag<select id="sagValg"></select></label>
-      <div id="dagensAftaler" class="note hidden" style="background:#E5F2EC;color:#17583F"></div>
+      <details id="sagInfo" class="hidden" style="margin-top:-4px"><summary style="min-height:36px;font-size:14px;color:var(--accent)">Vis hvad der står på sagen</summary><div id="sagInfoTxt" style="font-size:14px;white-space:pre-wrap;padding:4px 0 6px"></div></details>
+      <div id="dagensAftaler" class="hidden" style="background:#E5F2EC;color:#17583F;border-radius:12px;padding:8px 12px"></div>
       <div id="ingenSager" class="note hidden">Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.</div>
       <div class="seg" role="group" aria-label="Hvad vil du notere">
         <button type="button" data-type="timer" aria-pressed="true">Timer</button>
@@ -490,10 +491,24 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
 
   let aftaleValgtFor=null;
+  async function fuldfoert(id, val){
+    const s=items.get(id); if(!s||!s.aftale) return;
+    const d=Object.assign({},s,{aftale:Object.assign({},s.aftale,{fuldfort:val})});
+    await save(id,d, val? "Aftale fuldført" : "Aftale åbnet igen");
+  }
+  function visSagInfo(){
+    const s=sagById($("sagValg").value), box=$("sagInfo");
+    if(!s){ box.classList.add("hidden"); return; }
+    const linjer=[(s.bf? s.bf+" · ":"")+"Sag "+s.nr+" · "+s.adresse];
+    if(s.aftale && s.aftale.dato) linjer.push("Aftale "+aftaleTxt(s.aftale)+(s.aftale.fuldfort?" (fuldført)":""));
+    linjer.push(s.besk? s.besk : "Ingen beskrivelse");
+    $("sagInfoTxt").textContent=linjer.join("\n");
+    box.classList.remove("hidden");
+  }
   function renderSagValg(){
     const sel=$("sagValg"); const prev=sel.value;
     const dato=$("dato").value;
-    const harAft=s=>s.aftale && s.aftale.dato===dato;
+    const harAft=s=>s.aftale && s.aftale.dato===dato && !s.aftale.fuldfort;
     const list=activeSager().filter(s=>bfMatch(s) || harAft(s));
     const dagens=list.filter(harAft).sort((a,b)=>(a.aftale.tid||"").localeCompare(b.aftale.tid||""));
     const resten=list.filter(s=>!harAft(s));
@@ -503,7 +518,17 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     else if(list.some(s=>s.id===prev)) sel.value=prev;
     const da=$("dagensAftaler");
     da.classList.toggle("hidden", !dagens.length);
-    da.textContent = dagens.length? (dato===today()? "Aftaler i dag: ":"Aftaler denne dag: ")+dagens.map(s=>"kl. "+tidTxt(s.aftale)+" "+s.adresse).join(", ") : "";
+    da.replaceChildren(...(dagens.length? [el("div",{style:"font-weight:700;font-size:14px;padding:4px 0"}, dato===today()? "Aftaler i dag":"Aftaler denne dag"), ...dagens.map(s=>{
+      const d=el("details",{class:"sagdag",style:"border-top:1px solid #CFE6DA"});
+      d.append(el("summary",null, el("span",{style:"display:flex;align-items:center;min-width:0"}, el("span",{class:"pil","aria-hidden":"true"},"›"), el("span",{style:"overflow-wrap:anywhere"},"kl. "+tidTxt(s.aftale)+" · "+s.adresse))),
+        el("div",{style:"display:flex;flex-direction:column;gap:8px;padding:0 0 10px 18px;font-size:14px;color:var(--ink)"},
+          el("div",{class:"muted"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr),
+          s.besk? el("div",{style:"white-space:pre-wrap"},s.besk) : el("div",{class:"muted"},"Ingen beskrivelse"),
+          el("div",{class:"row"},
+            el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret sag"),
+            el("button",{type:"button",class:"btn small accent",onclick:()=>fuldfoert(s.id,true)},"Fuldført"))));
+      return d; })] : []));
+    visSagInfo();
     $("ingenSager").classList.toggle("hidden", list.length>0);
     if(!list.length) $("ingenSager").innerHTML = bfFilter && activeSager().length ? (bfFilter===ANDRE? "Ingen aktive sager uden boligforening" : "Ingen aktive sager for "+bfFilter.replace(/[<>&]/g,""))+". Tryk <b>Alle</b> ovenfor for at se alle sager." : 'Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.';
     $("gem").disabled = list.length===0;
@@ -779,11 +804,13 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const alle=sager().filter(s=>s.aftale&&s.aftale.dato).sort((a,b)=>(a.aftale.dato+(a.aftale.tid||"")).localeCompare(b.aftale.dato+(b.aftale.tid||"")));
     const idag=today();
     const kommende=alle.filter(s=>s.aftale.dato>=idag), tidl=alle.filter(s=>s.aftale.dato<idag).reverse();
-    $("aftaleKnap").textContent="Aftaler ("+kommende.length+")";
+    $("aftaleKnap").textContent="Aftaler ("+kommende.filter(s=>!s.aftale.fuldfort).length+")";
     $("kalKnapBox").replaceChildren(abonnerKnap());
     const raekke=s=>el("div",{class:"item"},
-      el("div",{class:"txt"}, el("span",{class:"tag"},(s.aftale.tid? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse), s.arkiveret? el("span",{class:"muted"},"Afsluttet"):null),
+      el("div",{class:"txt",style:s.aftale.fuldfort?"opacity:.6":""}, el("span",{class:"tag"},(s.aftale.tid? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"+(s.aftale.fuldfort?";text-decoration:line-through":"")},s.adresse), s.aftale.fuldfort? el("span",{class:"muted"},"Fuldført"):null, s.arkiveret? el("span",{class:"muted"},"Afsluttet"):null),
       el("div",{class:"row",style:"flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end"},
+        s.aftale.fuldfort ? el("button",{type:"button",class:"btn small",onclick:()=>fuldfoert(s.id,false)},"Fortryd")
+                          : el("button",{type:"button",class:"btn small accent",onclick:()=>fuldfoert(s.id,true)},"Fuldført"),
         el("button",{type:"button",class:"btn small",onclick:()=>{ $("dato").value=s.aftale.dato; pendingSel=s.id; aftaleValgtFor=s.aftale.dato; location.hash="idag"; renderSagValg(); renderDag(); }},"Notér"),
         el("button",{type:"button",class:"btn small",onclick:()=>startRetSag(s.id)},"Ret")));
     const grp={}; for(const s of kommende){ (grp[s.aftale.dato]=grp[s.aftale.dato]||[]).push(s); }
@@ -963,6 +990,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(retSag){
       const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal()});
       const gl=items.get(retSag)||{}; const id0=retSag;
+      if(gl.aftale && d.aftale && gl.aftale.fuldfort && gl.aftale.dato===d.aftale.dato && gl.aftale.tid===d.aftale.tid) d.aftale.fuldfort=true;
       const ok=await save(retSag,d,"Ændring gemt"); if(ok){ slutRetSag(); visKalBanner(id0, JSON.stringify(gl.aftale||null)!==JSON.stringify(d.aftale||null)); } return;
     }
     const id=newId("sag");
@@ -971,6 +999,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   });
 
   $("dato").addEventListener("change", ()=>{ renderSagValg(); renderDag(); });
+  $("sagValg").addEventListener("change", visSagInfo);
   $("hjemDato").addEventListener("change", renderHjem);
   window.addEventListener("hashchange", showView);
 
