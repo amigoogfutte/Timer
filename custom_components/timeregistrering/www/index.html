@@ -218,6 +218,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <label class="f">Adresse<input type="text" id="sagAdr" placeholder="Fx Munkemaen 100 A" autocomplete="off" required></label>
       <label class="f">Boligforening – initialer (valgfrit)<input type="text" id="sagBf" list="bfListe" placeholder="Fx OB" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
       <datalist id="bfListe"></datalist>
+      <div class="chips hidden" id="bfForslag" style="margin-top:-4px" aria-label="Brugte boligforeninger"></div>
       <label class="check" style="font-weight:600"><input type="checkbox" id="sagAftale"> Aftale</label>
       <div class="hidden" id="aftaleFelter" style="display:flex;flex-direction:column;gap:12px">
         <label class="f">Dato<input type="date" id="aftaleDato"></label>
@@ -331,10 +332,20 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const bfMatch=s=>!bfFilter || (bfFilter===ANDRE ? !s.bf : (s.bf||"")===bfFilter);
   const bfNavn=b=>b===ANDRE? "andre" : b;
   function alleBf(){ return [...new Set(sager().map(s=>s.bf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da")); }
+  // Forslag under feltet: de boligforeninger, der er brugt før
+  function visBfForslag(){
+    const liste=alleBf(), cur=$("sagBf").value.trim().toUpperCase(), box=$("bfForslag");
+    box.classList.toggle("hidden", liste.length===0);
+    box.replaceChildren(...liste.map(b=>{
+      const k=el("button",{type:"button","aria-pressed":b===cur?"true":"false"}, b);
+      k.addEventListener("click",()=>{ $("sagBf").value = (cur===b? "" : b); visBfForslag(); });
+      return k; }));
+  }
   function renderBf(){
     const liste=alleBf();
     if(bfFilter && bfFilter!==ANDRE && !liste.includes(bfFilter)) bfFilter="";
     $("bfListe").replaceChildren(...liste.map(b=>el("option",{value:b})));
+    visBfForslag();
     document.querySelectorAll(".bfChips").forEach(box=>{
       box.classList.toggle("hidden", liste.length===0);
       box.replaceChildren(...["",...liste,ANDRE].map(b=>{
@@ -923,13 +934,13 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const komma=v=>String(v==null?"":v).replace(".",",");
   function startRetSag(id){
     const s=items.get(id); if(!s) return; retSag=id;
-    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||"";
+    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||""; visBfForslag();
     $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; $("aftaleSlut").value=s.aftale?(s.aftale.slut||""):"08:00"; visAftaleFelter();
     $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden");
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
     else $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
   }
-  function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); visAftaleFelter(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
+  function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); visAftaleFelter(); visBfForslag(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
   $("sagAnnuller").addEventListener("click", slutRetSag);
 
   function startRetFast(id){
@@ -988,6 +999,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
   function skjulSagFindes(){ sagFindesId=null; $("sagFindes").classList.add("hidden"); }
   $("sagNr").addEventListener("input", skjulSagFindes);
+  $("sagBf").addEventListener("input", visBfForslag);
   $("sagFindesRet").addEventListener("click", async ()=>{
     const id=sagFindesId; skjulSagFindes(); const s=items.get(id); if(!s) return;
     if(s.arkiveret){ await save(id, Object.assign({},s,{arkiveret:false}), "Sag genåbnet"); }
