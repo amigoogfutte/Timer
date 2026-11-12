@@ -641,7 +641,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     visFasteSoeg();
     $("fastSum").textContent="Oprettede materialer ("+f.length+")";
     $("fastListe").replaceChildren(...(f.length? f.map(m=>el("div",{class:"item"},
-      el("div",{class:"txt"}, el("span",{style:"font-weight:600"},m.navn), el("span",{class:"muted"}, fmtNum(m.antal||1)+" "+(m.enhed||"stk")+(m.varenr?" · varenr. "+m.varenr:""))),
+      el("div",{class:"txt"}, el("span",{style:"font-weight:600"}, m.varenr? el("span",{class:"muted"},m.varenr+" · ") : null, m.navn), el("span",{class:"muted"}, "Standard: "+fmtNum(m.antal||1)+" "+(m.enhed||"stk"))),
       el("div",{class:"row",style:"flex:0 0 auto"},
         el("button",{type:"button",class:"btn small",onclick:()=>startRetFast(m.id)},"Ret"),
         delBtn(()=>remove(m.id,"Fjernet"),"Fjern "+m.navn)))) : [el("div",{class:"empty"},"Ingen faste materialer endnu.")]));
@@ -708,7 +708,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       return b; }));
     $("pakkeSum").textContent="Oprettede lister ("+pl.length+")";
     $("pakkeListe").replaceChildren(...(pl.length? pl.map(pk=>{
-      const navne=(pk.items||[]).map(id=>items.get(id)).filter(Boolean).map(m=>m.navn);
+      const navne=(pk.items||[]).map(id=>items.get(id)).filter(Boolean).map(m=>(m.varenr? m.varenr+" · ":"")+m.navn);
       return el("div",{class:"item"},
         el("div",{class:"txt"}, el("span",{style:"font-weight:600"},pk.navn), el("span",{class:"muted"}, navne.length? navne.join(", ") : "Ingen materialer")),
         el("div",{class:"row",style:"flex:0 0 auto"},
@@ -727,7 +727,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     box.replaceChildren(...(f.length? f.map(m=>{
       const cb=el("input",{type:"checkbox",style:"width:24px;height:24px;flex:0 0 auto"}); cb.checked=pakkeValg.has(m.id);
       cb.addEventListener("change",()=>{ cb.checked? pakkeValg.add(m.id) : pakkeValg.delete(m.id); $("pakkeAntal").textContent=pakkeValg.size+" valgt"; });
-      return el("label",{class:"check",style:"font-weight:500;cursor:pointer"}, cb, m.navn);
+      return el("label",{class:"check",style:"font-weight:500;cursor:pointer"}, cb, el("span",{style:"overflow-wrap:anywhere"}, m.varenr? el("span",{class:"muted",style:"font-weight:600"},m.varenr+" · ") : null, m.navn));
     }) : [el("div",{class:"empty"}, faste().length? "Ingen faste materialer matcher." : "Opret først nogle faste materialer ovenfor.")]));
     $("pakkeAntal").textContent=pakkeValg.size+" valgt";
   }
