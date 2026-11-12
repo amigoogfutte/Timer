@@ -239,6 +239,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       </div>
       <label class="f">Varenr. (valgfrit)<input type="text" id="fastNr" autocomplete="off"></label>
       <div class="row"><button type="button" class="btn hidden" id="fastAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="fastSubmit">Tilføj fast materiale</button></div>
+      <div id="importBox" class="note hidden" style="display:flex;flex-direction:column;gap:10px;background:#fff;color:var(--ink);border:1px solid #CADAF0"><span id="importTxt"></span><button type="button" class="btn accent" id="importKnap">Importér</button></div>
       <details id="fastDetails"><summary id="fastSum">Oprettede materialer</summary><div id="fastListe" class="list"></div></details>
     </form>
     <form class="card sek sek-pakke" id="pakkeForm">
@@ -806,7 +807,27 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
   window.addEventListener("scroll", ()=>requestAnimationFrame(markerHop), {passive:true});
   window.addEventListener("hashchange", ()=>setTimeout(markerHop,50));
-  function renderAll(){ renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
+  // Import af materialeliste (varenr + navn) uden dubletter
+  let importListe=null;
+  function erDublet(m, fast){
+    const n=(m.navn||"").trim().toLowerCase(), v=(m.varenr||"").trim();
+    return fast.some(f=> (v && (f.varenr||"").trim()===v) || ((f.navn||"").trim().toLowerCase()===n && (!v || !(f.varenr||"").trim())));
+  }
+  function nyeImport(){ if(!importListe) return []; const f=faste(); return importListe.filter(m=>!erDublet(m,f)); }
+  function visImport(){
+    const nye=nyeImport(), box=$("importBox");
+    box.classList.toggle("hidden", nye.length===0);
+    if(nye.length) $("importTxt").textContent=nye.length+" materialer fra Mobilplan-listen er klar til at blive lagt ind som faste materialer. Dem, du allerede har, springes over.";
+  }
+  fetch("materialer-import.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{ if(Array.isArray(j)){ importListe=j; visImport(); } }).catch(()=>{});
+  $("importKnap").addEventListener("click",()=>{
+    const nye=nyeImport(); if(!nye.length) return;
+    let t=Date.now();
+    for(const m of nye){ const id=newId("fast"); db.records[id]={kind:"fast", navn:m.navn, antal:1, enhed:m.enhed||"stk", varenr:m.varenr||"", id, updated:t++}; markDirty(id); }
+    persist(); rebuild(); renderAll(); scheduleSync(500);
+    toast(nye.length+" materialer lagt ind");
+  });
+  function renderAll(){ visImport(); renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); }
 
   // ---------- events ----------
   function setType(t){
