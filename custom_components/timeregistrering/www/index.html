@@ -148,7 +148,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <button type="button" id="sagKort" class="btn" style="text-align:left;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;min-height:56px;color:var(--ink)"><span id="sagKortTxt" style="overflow-wrap:anywhere;white-space:normal"></span><span aria-hidden="true" style="color:var(--muted)">▾</span></button>
         <div id="sagVaelger" class="hidden list" style="border:1px solid var(--line);border-radius:12px;padding:4px 10px;max-height:360px;overflow:auto;background:#fff"></div>
       </div>
-      <div id="sagInfo" class="hidden" style="background:var(--bg);border:1px solid var(--soft);border-radius:12px;padding:10px 12px"><div class="muted" style="font-size:12px;font-weight:600;margin-bottom:4px">På sagen står</div><div id="sagInfoTxt" style="font-size:15px;white-space:pre-wrap;overflow-wrap:anywhere"></div></div>
+      <div id="sagInfo" class="hidden" style="background:var(--bg);border:1px solid var(--soft);border-radius:12px;padding:10px 12px"><div class="muted" style="font-size:12px;font-weight:600;margin-bottom:4px">På sagen står</div><div id="sagInfoTxt" style="font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:5.6em;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain"></div></div>
       <div id="dagensAftaler" class="hidden" style="background:#E5F2EC;color:#17583F;border-radius:12px;padding:8px 12px"></div>
       <div id="ingenSager" class="note hidden">Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.</div>
       <div class="seg" role="group" aria-label="Hvad vil du notere">
