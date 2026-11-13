@@ -84,6 +84,12 @@ label.f{min-width:0}
 .hop .h-link{--hb:#FBF5E8;--hl:#EEDDB0;--hi:#6E520C}
 .hop button[aria-current=true]{background:var(--hi);color:#fff;border-color:var(--hi)}
 #v-sager .sek{scroll-margin-top:calc(70px + env(safe-area-inset-top))}
+/* Foldbare afsnit på Sager */
+#v-sager .sek > h2:first-child{cursor:pointer;user-select:none;-webkit-user-select:none;min-height:32px}
+#v-sager .sek > h2:first-child::after{content:"›";margin-left:auto;font-size:24px;line-height:1;color:var(--sink);transition:transform .15s;transform:rotate(90deg)}
+#v-sager .sek.lukket > h2:first-child::after{transform:rotate(0deg)}
+#v-sager .sek.lukket > :not(h2:first-child){display:none!important}
+#v-sager .sek.lukket{gap:0}
 .formboks{background:var(--tbg);border:1px solid var(--tline);border-radius:14px;padding:12px}
 .seg button[data-type=timer][aria-pressed=true]{background:#E7F3EC;color:#17583F}
 .seg button[data-type=materiale][aria-pressed=true]{background:#E8F0FA;color:#1F4E85}
@@ -130,7 +136,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v0.9.8</span>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v0.9.9</span>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -804,7 +810,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("pakkeAntal").textContent=pakkeValg.size+" valgt";
   }
   $("pakkeSoeg").addEventListener("input", visPakkeValg);
-  function startRetPakke(id){
+  function startRetPakke(id){ aabnSek("pakkeForm");
     const pk=items.get(id); if(!pk) return; retPakke=id;
     $("pakkeNavn").value=pk.navn||""; pakkeValg.clear(); (pk.items||[]).forEach(x=>pakkeValg.add(x));
     $("pakkeSoeg").value=""; $("pakkeValgListe").dataset.q="#"; visPakkeValg();
@@ -866,9 +872,23 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("tidlAftSum").textContent="Tidligere aftaler ("+tidl.length+")";
     $("tidlAftListe").replaceChildren(...(tidl.length? tidl.map(s=>{ const r=raekke(s); r.querySelector(".tag").textContent=fmtDato(s.aftale.dato)+(s.aftale.tid?" kl. "+tidTxt(s.aftale):"")+" · Sag "+s.nr; return r; }) : [el("div",{class:"empty"},"Ingen.")]));
   }
+  // Afsnittene på Sager er foldet sammen; tryk på overskriften for at folde ud/ind
+  function aabnSek(id, aaben=true){
+    const k=$(id); if(!k) return;
+    k.classList.toggle("lukket", !aaben);
+    const h=k.querySelector(":scope > h2"); if(h) h.setAttribute("aria-expanded", aaben?"true":"false");
+  }
+  document.querySelectorAll("#v-sager .sek").forEach(k=>{
+    const h=k.querySelector(":scope > h2"); if(!h) return;
+    k.classList.add("lukket");
+    h.setAttribute("role","button"); h.setAttribute("tabindex","0"); h.setAttribute("aria-expanded","false");
+    const skift=()=>aabnSek(k.id, k.classList.contains("lukket"));
+    h.addEventListener("click", skift);
+    h.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); skift(); } });
+  });
   // Hop-menuen på Sager
   document.querySelectorAll(".hop button[data-hop]").forEach(b=>b.addEventListener("click",()=>{
-    const m=$(b.dataset.hop); if(m) m.scrollIntoView({behavior:"smooth",block:"start"});
+    const m=$(b.dataset.hop); if(m){ aabnSek(b.dataset.hop); m.scrollIntoView({behavior:"smooth",block:"start"}); }
   }));
   function markerHop(){
     if($("v-sager").classList.contains("hidden")) return;
@@ -943,7 +963,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   // ---------- rette ----------
   let retSag=null, retFast=null, retPost=null;
   const komma=v=>String(v==null?"":v).replace(".",",");
-  function startRetSag(id){
+  function startRetSag(id){ aabnSek("sagForm");
     const s=items.get(id); if(!s) return; retSag=id;
     $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||""; visBfForslag();
     $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; $("aftaleSlut").value=s.aftale?(s.aftale.slut||""):"08:00"; visAftaleFelter();
@@ -954,7 +974,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); visAftaleFelter(); visBfForslag(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
   $("sagAnnuller").addEventListener("click", slutRetSag);
 
-  function startRetFast(id){
+  function startRetFast(id){ aabnSek("fastForm");
     const m=items.get(id); if(!m) return; retFast=id;
     $("fastNavn").value=m.navn||""; $("fastAntal").value=komma(m.antal||1); $("fastEnhed").value=m.enhed||"stk"; $("fastNr").value=m.varenr||"";
     $("fastSubmit").textContent="Gem ændringer"; $("fastAnnuller").classList.remove("hidden");
