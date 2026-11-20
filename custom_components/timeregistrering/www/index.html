@@ -138,7 +138,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.0.2</span>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.0.3</span>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -176,7 +176,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
           <button type="button" data-t="1">1 t</button>
           <button type="button" data-t="2">2 t</button>
           <button type="button" data-t="4">4 t</button>
-          <button type="button" data-t="7.75">Hel dag</button>
+          <button type="button" data-t="hel">Hel dag</button>
         </div>
         <label class="f" style="margin-top:12px">Hvad lavede du? (valgfrit)<textarea id="timerTekst" placeholder="Fx monteret nye døre"></textarea></label>
       </div>
@@ -975,7 +975,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   $("tMinus").addEventListener("click",()=>{ const q=Math.round(tv()*4); visTimer(Math.max(0,q-1)/4); });
   $("tPlus").addEventListener("click",()=>{ const q=Math.round(tv()*4); visTimer((q+1)/4); });
   $("timer").addEventListener("input",()=>{ const v=tv(); const h=Math.floor(v), m=Math.round((v-h)*60); $("timerTxt").textContent=(h? h+(h===1?" time":" timer"):"")+(h&&m?" ":"")+(m? m+" min":"") || "0 timer"; });
-  document.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>visTimer(Number(b.dataset.t))));
+  // Hel dag: 7,75 t man-tor, 6 t fredag (efter datoen der noteres på)
+  function helDagTimer(){ const v=$("dato").value; const d=v? new Date(v+"T12:00:00") : new Date(); return d.getDay()===5? 6 : 7.75; }
+  document.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>visTimer(b.dataset.t==="hel"? helDagTimer() : Number(b.dataset.t))));
 
   // ---------- rette ----------
   let retSag=null, retFast=null, retPost=null;
