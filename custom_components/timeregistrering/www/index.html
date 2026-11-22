@@ -140,7 +140,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.0.4</span>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.0.5</span>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -204,6 +204,17 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     <div class="card">
       <div class="sum" style="align-items:center"><h2 id="dagTitel">Noteret i dag</h2><span style="display:flex;flex-direction:column;align-items:flex-end"><span class="big" id="dagSum" style="font-size:28px">0</span><span class="muted">timer i alt</span></span></div>
       <div id="dagListe" class="list"></div>
+    </div>
+
+    <div class="card">
+      <div class="sum" style="align-items:center"><div><h2>Noteret denne uge</h2><div class="muted" id="ugeNuTxt"></div></div><span style="display:flex;flex-direction:column;align-items:flex-end"><span class="big" id="ugeNuSum" style="font-size:28px">0</span><span class="muted">timer i alt</span></span></div>
+      <div id="ugeNuListe" class="list"></div>
+    </div>
+
+    <div class="card">
+      <div class="sum" style="align-items:center"><div><h2>Vælg uge</h2><div class="muted" id="ugeValgTxt"></div></div><span style="display:flex;flex-direction:column;align-items:flex-end"><span class="big" id="ugeValgSum" style="font-size:28px">0</span><span class="muted">timer i alt</span></span></div>
+      <div class="row" style="align-items:center"><button type="button" class="btn small" id="ugeForr" aria-label="Forrige uge" style="flex:0 0 auto">‹</button><select id="ugeValg" style="flex:1;min-width:0"></select><button type="button" class="btn small" id="ugeNaeste" aria-label="Næste uge" style="flex:0 0 auto">›</button></div>
+      <div id="ugeValgListe" class="list"></div>
     </div>
   </section>
 
@@ -645,6 +656,67 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     box.replaceChildren(...out);
   }
 
+
+  // ---- Ugeoversigt ----
+  function isoDato(d){ const x=new Date(d); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,10); }
+  function parseDato(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+  function mandagAf(s){ const d=parseDato(s); d.setDate(d.getDate()-((d.getDay()+6)%7)); return isoDato(d); }
+  function plusDage(s,n){ const d=parseDato(s); d.setDate(d.getDate()+n); return isoDato(d); }
+  function ugeNr(s){ const d=parseDato(s); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); const j=new Date(d.getFullYear(),0,4); return 1+Math.round(((d-j)/864e5-3+((j.getDay()+6)%7))/7); }
+  function kortDato(s){ return parseDato(s).toLocaleDateString("da-DK",{day:"numeric",month:"short"}); }
+  function ugeTxt(man){ return "Uge "+ugeNr(man)+" · "+kortDato(man)+" – "+kortDato(plusDage(man,6)); }
+  const ugeAaben={};
+  function renderUge(man, listeId, sumId){
+    const slut=plusDage(man,6);
+    const posts=all("post").filter(p=>p.dato>=man && p.dato<=slut);
+    const tim=ps=>ps.filter(p=>p.type==="timer").reduce((a,p)=>a+Number(p.timer||0),0);
+    $(sumId).textContent=fmtNum(tim(posts));
+    const box=$(listeId);
+    if(!posts.length){ box.replaceChildren(el("div",{class:"empty"},"Intet noteret i den uge.")); return; }
+    const out=[];
+    for(let i=0;i<7;i++){
+      const dag=plusDage(man,i); const dp=posts.filter(p=>p.dato===dag).sort((a,b)=>(a.oprettet||0)-(b.oprettet||0));
+      if(!dp.length) continue;
+      const det=el("details",{class:"sagdag"}); if(ugeAaben[listeId]===dag) det.open=true;
+      det.addEventListener("toggle",()=>{ if(det.open){ ugeAaben[listeId]=dag; box.querySelectorAll(":scope > details.sagdag[open]").forEach(o=>{ if(o!==det) o.open=false; }); } else if(ugeAaben[listeId]===dag) delete ugeAaben[listeId]; });
+      const navn=fmtDato(dag); det.append(el("summary",null,
+        el("span",{style:"display:flex;align-items:center;min-width:0"}, el("span",{class:"pil","aria-hidden":"true"},"›"), el("span",{style:"overflow-wrap:anywhere"}, navn.charAt(0).toUpperCase()+navn.slice(1))),
+        el("span",{style:"flex:0 0 auto;font-weight:700"}, fmtNum(tim(dp))+" t")));
+      const g={}; for(const p of dp) (g[p.sagId]=g[p.sagId]||[]).push(p);
+      const l=el("div",{class:"list"});
+      for(const sid in g){
+        const s=sagById(sid); const ps=g[sid];
+        const mat=ps.filter(p=>p.type==="materiale"), noter=ps.filter(p=>p.type==="note"||(p.type==="timer"&&p.tekst));
+        l.append(el("div",{class:"item"}, el("div",{class:"txt"},
+          el("span",{style:"font-weight:600;overflow-wrap:anywhere"}, sagNavn(s)),
+          el("span",{class:"muted"}, fmtNum(tim(ps))+" t"+(mat.length? " · "+mat.length+(mat.length===1?" materiale":" materialer"):"")+(noter.length? " · "+noter.length+(noter.length===1?" note":" noter"):""))),
+          el("div",{class:"row",style:"flex:0 0 auto"}, el("button",{type:"button",class:"btn small",onclick:()=>{ $("dato").value=dag; aabneSager.clear(); aabneSager.add(sid); renderSagValg(); renderDag(); window.scrollTo({top:0,behavior:"smooth"}); }},"Vis dag"))));
+      }
+      det.append(l); out.push(det);
+    }
+    box.replaceChildren(...out);
+  }
+  let ugeValgt=null;
+  function renderUger(){
+    const nu=mandagAf(today());
+    $("ugeNuTxt").textContent=ugeTxt(nu);
+    renderUge(nu,"ugeNuListe","ugeNuSum");
+    if(!ugeValgt) ugeValgt=plusDage(nu,-7);
+    const sel=$("ugeValg"); const opts=[];
+    let foerste=plusDage(nu,-7*104);
+    for(const p of all("post")) if(p.dato && p.dato<foerste) foerste=mandagAf(p.dato);
+    if(ugeValgt<foerste) foerste=ugeValgt;
+    let sidste=plusDage(nu,7*8); if(ugeValgt>sidste) sidste=ugeValgt;
+    const harData=new Set(all("post").map(p=>p.dato&&mandagAf(p.dato)));
+    for(let m=sidste; m>=foerste; m=plusDage(m,-7)) opts.push(el("option",{value:m}, ugeTxt(m)+(m===nu?" (denne uge)":"")+(harData.has(m)?" •":"")));
+    sel.replaceChildren(...opts); sel.value=ugeValgt;
+    $("ugeValgTxt").textContent=ugeTxt(ugeValgt);
+    renderUge(ugeValgt,"ugeValgListe","ugeValgSum");
+  }
+  $("ugeValg").addEventListener("change",()=>{ ugeValgt=$("ugeValg").value; renderUger(); });
+  $("ugeForr").addEventListener("click",()=>{ ugeValgt=plusDage(ugeValgt,-7); renderUger(); });
+  $("ugeNaeste").addEventListener("click",()=>{ ugeValgt=plusDage(ugeValgt,7); renderUger(); });
+
   function renderVarer(){
     const names=new Set(); for(const p of all("post")) if(p.type==="materiale"&&p.vare) names.add(p.vare);
     $("vareListe").replaceChildren(...[...names].sort().map(n=>el("option",{value:n})));
@@ -964,7 +1036,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function soeg(liste, q, felter){
     return liste.map(x=>({x,sc:soegScore(felter(x),q)})).filter(r=>r.sc>0).sort((a,b)=>b.sc-a.sc).map(r=>r.x);
   }
-  function renderAll(){ visImport(); renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); if(typeof renderHelDag==="function") renderHelDag(); }
+  function renderAll(){ visImport(); renderBf(); renderAftaler(); renderSagValg(); renderDag(); renderUger(); renderVarer(); renderPakker(); renderFaste(); renderSager(); renderHjem(); if(typeof renderHelDag==="function") renderHelDag(); }
 
   // ---------- events ----------
   function setType(t){
