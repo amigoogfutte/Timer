@@ -140,7 +140,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.1.0</span>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.0</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -253,7 +253,6 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     </form>
     <div class="card sek sek-aktiv" id="aktivKort">
       <h2>Aktive sager</h2>
-      <div class="row sortRk" style="align-items:center;gap:8px"><select class="sortFelt" aria-label="Sortér efter" style="flex:1;min-width:0"><option value="brugt">Senest brugt</option><option value="nr">Sagsnummer</option><option value="adresse">Adresse</option><option value="bf">Boligforening</option><option value="oprettet">Oprettet</option></select><button type="button" class="btn small sortRet" style="flex:0 0 auto;min-width:118px"></button></div>
       <div class="chips bfChips hidden" role="group" aria-label="Vis kun boligforening"></div>
       <div id="sagListe" class="list"></div>
     </div>
@@ -305,7 +304,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   <!-- AFSLUTTEDE SAGER -->
   <section id="v-afsluttede" data-view class="hidden">
     <header class="top"><div><a href="#sager" style="font-weight:600;text-decoration:none;color:var(--accent);display:inline-flex;min-height:44px;align-items:center">‹ Sager</a><h1>Afsluttede sager</h1></div></header>
-    <div class="card"><div class="row sortRk" style="align-items:center;gap:8px"><select class="sortFelt" aria-label="Sortér efter" style="flex:1;min-width:0"><option value="brugt">Senest brugt</option><option value="nr">Sagsnummer</option><option value="adresse">Adresse</option><option value="bf">Boligforening</option><option value="oprettet">Oprettet</option></select><button type="button" class="btn small sortRet" style="flex:0 0 auto;min-width:118px"></button></div><div id="arkivListe" class="list"></div></div>
+    <div class="card"><div id="arkivListe" class="list"></div></div>
   </section>
 
   <!-- TIL MOBILPLAN -->
@@ -332,6 +331,14 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<div id="indstPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="indstTitel" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center">
+  <div class="card" style="width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));gap:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><h2 id="indstTitel" style="margin:0">⚙️ Indstillinger</h2><button type="button" class="btn small" id="indstLuk" style="flex:0 0 auto">Luk</button></div>
+    <label class="f">Sortér sager efter<select id="indstFelt"><option value="brugt">Senest brugt</option><option value="nr">Sagsnummer</option><option value="adresse">Adresse</option><option value="bf">Boligforening</option><option value="oprettet">Oprettet</option></select></label>
+    <div class="f"><span>Rækkefølge</span><div class="row" role="group" aria-label="Rækkefølge"><button type="button" class="btn" id="indstOp">Stigende ↑</button><button type="button" class="btn" id="indstNed">Faldende ↓</button></div></div>
+    <div class="muted" style="font-size:13px">Gælder alle lister og rullemenuer med sager i appen. Indstillingen er din egen og følger din Home Assistant-bruger på alle dine enheder.</div>
+  </div>
+</div>
 <script>
 (function(){
   "use strict";
@@ -532,11 +539,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(v==="idag" && typeof renderSagValg==="function"){ try{ aftaleValgtFor=null; renderSagValg(); }catch(e){} }
   }
 
-  function activeSager(){
-    const s=sager().filter(x=>!x.arkiveret);
-    const lastUsed={}; for(const p of all("post")){ lastUsed[p.sagId]=Math.max(lastUsed[p.sagId]||0,p.oprettet||0); }
-    return s.sort((a,b)=>(lastUsed[b.id]||b.oprettet||0)-(lastUsed[a.id]||a.oprettet||0));
-  }
+  function activeSager(){ return sorterSager(sager().filter(x=>!x.arkiveret)); }
 
   let aftaleValgtFor=null;
   async function fuldfoert(id, val){
@@ -627,7 +630,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(!posts.length){ box.replaceChildren(el("div",{class:"empty"},"Intet noteret endnu.")); return; }
     const groups={}; for(const p of posts){ (groups[p.sagId]=groups[p.sagId]||[]).push(p); }
     const out=[];
-    for(const sid in groups){
+    for(const sid of sorterIds(Object.keys(groups))){
       const s=sagById(sid);
       const sagTimer=groups[sid].filter(p=>p.type==="timer").reduce((a,p)=>a+Number(p.timer||0),0);
       const det=el("details",{class:"sagdag"});
@@ -687,7 +690,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         el("span",{style:"display:flex;align-items:center;min-width:0"}, el("span",{class:"pil","aria-hidden":"true"},"›"), el("span",{style:"overflow-wrap:anywhere"}, navn.charAt(0).toUpperCase()+navn.slice(1))),
         el("span",{style:"flex:0 0 auto;font-weight:700"}, fmtNum(tim(dp))+" t")));
       const gd={}; for(const p of dp) (gd[p.sagId]=gd[p.sagId]||[]).push(p);
-      det.append(el("div",{class:"list"}, ...Object.keys(gd).map(sid=>el("div",{class:"item"},
+      det.append(el("div",{class:"list"}, ...sorterIds(Object.keys(gd)).map(sid=>el("div",{class:"item"},
         el("div",{class:"txt",style:"flex:1;min-width:0"}, el("span",{style:"font-weight:600;overflow-wrap:anywhere"}, sagNavn(sagById(sid))), el("span",{class:"muted"}, fmtNum(tim(gd[sid]))+" t")),
         el("div",{class:"row",style:"flex:0 0 auto"}, el("button",{type:"button",class:"btn small",onclick:()=>{ $("dato").value=dag; aabneSager.clear(); aabneSager.add(sid); renderSagValg(); renderDag(); window.scrollTo({top:0,behavior:"smooth"}); }},"Vis dag"))))));
       dagOut.push(det);
@@ -695,7 +698,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(dagOut.length){ out.push(el("div",{class:"bokstitel",style:"margin-top:4px"},"Timer")); out.push(...dagOut); }
     const g={}; for(const p of posts) if(p.type==="materiale"||(p.type==="note"&&p.tekst)) (g[p.sagId]=g[p.sagId]||[]).push(p);
     if(Object.keys(g).length) out.push(el("div",{class:"bokstitel",style:"margin-top:12px"},"Materialer og noter"));
-    for(const sid in g){
+    for(const sid of sorterIds(Object.keys(g))){
       const s=sagById(sid); const ps=g[sid];
       const mat={}; for(const p of ps.filter(p=>p.type==="materiale")){ const k=p.vare+"|"+(p.enhed||"stk")+"|"+(p.varenr||""); mat[k]=(mat[k]||0)+Number(p.antal||0); }
       const matLines=Object.entries(mat).map(([k,a])=>{ const [v,e,nr]=k.split("|"); return fmtNum(a)+" "+e+" "+v+(nr?" ("+nr+")":""); });
@@ -744,34 +747,53 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     return node;
   }
 
-  // ---- Sortering af sager ----
-  let sortFelt="brugt", sortOp=false;
-  try{ const o=JSON.parse(localStorage.getItem("tm_sort")||"null"); if(o&&o.felt){ sortFelt=o.felt; sortOp=!!o.op; } }catch(e){}
+  // ---- Sortering af sager (indstilling pr. bruger, synkroniseres) ----
   const sortStd={brugt:false,nr:true,adresse:true,bf:true,oprettet:false}; // naturlig retning pr. felt (true = stigende)
+  function sortIndst(){
+    const r=items.get("indst-sort");
+    if(r && sortStd.hasOwnProperty(r.felt)) return {felt:r.felt, op:!!r.op};
+    try{ const o=JSON.parse(localStorage.getItem("tm_sort")||"null"); if(o && sortStd.hasOwnProperty(o.felt)) return {felt:o.felt, op:!!o.op}; }catch(e){}
+    return {felt:"brugt", op:false};
+  }
   function sorterSager(liste){
+    const {felt, op}=sortIndst();
     const lastUsed={}; for(const p of all("post")){ lastUsed[p.sagId]=Math.max(lastUsed[p.sagId]||0,p.oprettet||0); }
     const sml=(a,b)=>String(a||"").localeCompare(String(b||""),"da",{numeric:true,sensitivity:"base"});
     const key={
       brugt:(a,b)=>(lastUsed[a.id]||a.oprettet||0)-(lastUsed[b.id]||b.oprettet||0),
       nr:(a,b)=>sml(a.nr,b.nr),
       adresse:(a,b)=>sml(a.adresse,b.adresse)||sml(a.nr,b.nr),
-      bf:(a,b)=>((a.bf?0:1)-(b.bf?0:1))||sml(a.bf,b.bf)||sml(a.adresse,b.adresse),
+      bf:(a,b)=>sml(a.bf,b.bf)||sml(a.adresse,b.adresse),
       oprettet:(a,b)=>(a.oprettet||0)-(b.oprettet||0)
-    }[sortFelt]||((a,b)=>0);
-    const r=sortOp?1:-1;
-    return liste.slice().sort((a,b)=>{ const k=key(a,b); return sortFelt==="bf" && (!a.bf||!b.bf) && a.bf!==b.bf ? k : k*r; });
+    }[felt];
+    const r=op?1:-1;
+    return liste.slice().sort((a,b)=>{ if(felt==="bf" && !a.bf!==!b.bf) return a.bf? -1 : 1; return key(a,b)*r; });
   }
-  function visSort(){
-    document.querySelectorAll(".sortFelt").forEach(x=>x.value=sortFelt);
-    document.querySelectorAll(".sortRet").forEach(x=>{ x.textContent=sortOp? "Stigende ↑" : "Faldende ↓"; x.setAttribute("aria-label", sortOp? "Stigende – tryk for faldende" : "Faldende – tryk for stigende"); });
+  // Sorterer sags-id'er (fx grupper af noteringer) efter samme indstilling
+  function sorterIds(ids){
+    const kendte=sorterSager(ids.map(sagById).filter(Boolean)).map(s=>s.id);
+    return [...kendte, ...ids.filter(id=>!kendte.includes(id))];
   }
-  function gemSort(){ try{ localStorage.setItem("tm_sort",JSON.stringify({felt:sortFelt,op:sortOp})); }catch(e){} visSort(); renderSager(); }
-  document.querySelectorAll(".sortFelt").forEach(x=>x.addEventListener("change",()=>{ sortFelt=x.value; sortOp=sortStd[sortFelt]; gemSort(); }));
-  document.querySelectorAll(".sortRet").forEach(x=>x.addEventListener("click",()=>{ sortOp=!sortOp; gemSort(); }));
-  visSort();
+  function visIndst(){
+    const {felt,op}=sortIndst();
+    $("indstFelt").value=felt;
+    $("indstOp").classList.toggle("primary", op); $("indstNed").classList.toggle("primary", !op);
+    $("indstOp").setAttribute("aria-pressed", op?"true":"false"); $("indstNed").setAttribute("aria-pressed", op?"false":"true");
+  }
+  function gemIndst(felt, op){
+    try{ localStorage.setItem("tm_sort",JSON.stringify({felt,op})); }catch(e){}
+    save("indst-sort",{kind:"indstilling",felt,op},"Sortering gemt");
+    visIndst();
+  }
+  $("tandhjul").addEventListener("click",()=>{ visIndst(); $("indstPanel").classList.remove("hidden"); });
+  $("indstLuk").addEventListener("click",()=>$("indstPanel").classList.add("hidden"));
+  $("indstPanel").addEventListener("click",e=>{ if(e.target.id==="indstPanel") $("indstPanel").classList.add("hidden"); });
+  $("indstFelt").addEventListener("change",()=>{ const f=$("indstFelt").value; gemIndst(f, sortStd[f]); });
+  $("indstOp").addEventListener("click",()=>gemIndst(sortIndst().felt, true));
+  $("indstNed").addEventListener("click",()=>gemIndst(sortIndst().felt, false));
 
   function renderSager(){
-    const act=sorterSager(activeSager().filter(bfMatch)), ark=sorterSager(sager().filter(s=>s.arkiveret && bfMatch(s)));
+    const act=activeSager().filter(bfMatch), ark=sorterSager(sager().filter(s=>s.arkiveret && bfMatch(s)));
     const mk=(s,archived)=>el("div",{class:"item"},
       dobbeltTryk(el("div",{class:"txt",style:"flex:1;cursor:pointer;user-select:none;-webkit-user-select:none"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse),
         s.aftale && s.aftale.dato ? el("span",{class:"muted"},"Aftale "+aftaleTxt(s.aftale)) : null,
@@ -810,7 +832,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const posts=all("post").filter(p=>p.dato===dato);
     const groups={}; for(const p of posts){ (groups[p.sagId]=groups[p.sagId]||[]).push(p); }
     let total=0; const cards=[];
-    for(const sid in groups){
+    for(const sid of sorterIds(Object.keys(groups))){
       const s=sagById(sid); const r=sagTekst(s,groups[sid]); total+=r.timer;
       const doneId="done-"+dato+"-"+sid; const done=items.has(doneId);
       const matLines=Object.entries(r.mat).map(([k,a])=>{ const [v,e,nr]=k.split("|"); return fmtNum(a)+" "+e+" "+v+(nr?" ("+nr+")":""); });
