@@ -140,7 +140,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.1</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.2</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -279,12 +279,6 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="row"><button type="button" class="btn hidden" id="pakkeAnnuller" style="flex:0 0 auto">Annuller</button><button class="btn accent" type="submit" id="pakkeSubmit">Opret liste</button></div>
       <details><summary id="pakkeSum">Oprettede lister</summary><div id="pakkeListe" class="list"></div></details>
     </form>
-    <form class="card sek sek-dag" id="helDagForm">
-      <h2>Hel dag</h2>
-      <p class="muted" style="margin:0">Hvor mange timer knappen "Hel dag" giver på hver ugedag. Skriv fx 7:45 eller 7,75.</p>
-      <div class="dagGrid" id="helDagFelter"></div>
-      <div class="row"><button type="button" class="btn" id="helDagStd" style="flex:0 0 auto">Standard</button><button class="btn accent" type="submit">Gem</button></div>
-    </form>
     <a href="#aftaler" class="btn sek-link" id="aftaleKnap" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Aftaler</a>
     <a href="#afsluttede" class="btn sek-link" id="arkivSum" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);margin-top:12px">Afsluttede sager</a>
   </section>
@@ -332,11 +326,17 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div id="indstPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="indstTitel" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center">
-  <div class="card" style="width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));gap:14px">
+  <div class="card" style="width:100%;max-width:560px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));gap:14px">
     <div style="display:flex;align-items:center;justify-content:space-between"><h2 id="indstTitel" style="margin:0">⚙️ Indstillinger</h2><button type="button" class="btn small" id="indstLuk" style="flex:0 0 auto">Luk</button></div>
     <label class="f">Sortér sager efter<select id="indstFelt"><option value="brugt">Senest brugt</option><option value="nr">Sagsnummer</option><option value="adresse">Adresse</option><option value="bf">Boligforening</option><option value="oprettet">Oprettet</option></select></label>
     <div class="f"><span>Rækkefølge</span><div class="row" role="group" aria-label="Rækkefølge"><button type="button" class="btn" id="indstOp">Stigende ↑</button><button type="button" class="btn" id="indstNed">Faldende ↓</button></div></div>
     <div class="muted" style="font-size:13px">Gælder alle lister og rullemenuer med sager i appen. Indstillingen er din egen og følger din Home Assistant-bruger på alle dine enheder.</div>
+    <form id="helDagForm" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line,#ddd);padding-top:14px">
+      <h3 style="margin:0">Hel dag</h3>
+      <p class="muted" style="margin:0;font-size:13px">Hvor mange timer knappen "Hel dag" giver på hver ugedag. Skriv fx 7:45 eller 7,75.</p>
+      <div class="dagGrid" id="helDagFelter"></div>
+      <div class="row"><button type="button" class="btn" id="helDagStd" style="flex:0 0 auto">Standard</button><button class="btn accent" type="submit">Gem</button></div>
+    </form>
   </div>
 </div>
 <script>
@@ -785,7 +785,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     save("indst-sort",{kind:"indstilling",felt,op},"Sortering gemt");
     visIndst();
   }
-  $("tandhjul").addEventListener("click",()=>{ visIndst(); $("indstPanel").classList.remove("hidden"); });
+  $("tandhjul").addEventListener("click",()=>{ visIndst(); if(typeof renderHelDag==="function") renderHelDag(); $("indstPanel").classList.remove("hidden"); });
   $("indstLuk").addEventListener("click",()=>$("indstPanel").classList.add("hidden"));
   $("indstPanel").addEventListener("click",e=>{ if(e.target.id==="indstPanel") $("indstPanel").classList.add("hidden"); });
   $("indstFelt").addEventListener("change",()=>{ const f=$("indstFelt").value; gemIndst(f, sortStd[f]); });
@@ -1118,7 +1118,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   $("tMinus").addEventListener("click",()=>{ const q=Math.round(tv()*4); visTimer(Math.max(0,q-1)/4); });
   $("tPlus").addEventListener("click",()=>{ const q=Math.round(tv()*4); visTimer((q+1)/4); });
   $("timer").addEventListener("input",()=>{ const v=tv(); const h=Math.floor(v), m=Math.round((v-h)*60); $("timerTxt").textContent=(h? h+(h===1?" time":" timer"):"")+(h&&m?" ":"")+(m? m+" min":"") || "0 timer"; });
-  // Hel dag: timer pr. ugedag (0=søndag … 6=lørdag), kan rettes under Sager. Synkroniseres som posten "indst_heldag".
+  // Hel dag: timer pr. ugedag (0=søndag … 6=lørdag), kan rettes under tandhjulet (Indstillinger). Synkroniseres som posten "indst_heldag".
   const HELDAG_ID="indst_heldag", HELDAG_STD=[7.75,7.75,7.75,7.75,7.75,6,7.75];
   const DAGNAVNE=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
   function helDagListe(){ const r=items.get(HELDAG_ID); const t=r&&Array.isArray(r.timer)&&r.timer.length===7? r.timer : HELDAG_STD; return t.map((v,i)=>Number.isFinite(Number(v))? Number(v) : HELDAG_STD[i]); }
