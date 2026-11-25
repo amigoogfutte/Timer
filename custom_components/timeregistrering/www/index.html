@@ -86,12 +86,14 @@ label.f{min-width:0}
 .hop .h-link{--hb:#FBF5E8;--hl:#EEDDB0;--hi:#6E520C}
 .hop button[aria-current=true]{background:var(--hi);color:#fff;border-color:var(--hi)}
 #v-sager .sek{scroll-margin-top:calc(70px + env(safe-area-inset-top))}
-/* Foldbare afsnit på Sager */
-#v-sager .sek > h2:first-child{cursor:pointer;user-select:none;-webkit-user-select:none;min-height:32px}
-#v-sager .sek > h2:first-child::after{content:"›";margin-left:auto;font-size:24px;line-height:1;color:var(--sink);transition:transform .15s;transform:rotate(90deg)}
-#v-sager .sek.lukket > h2:first-child::after{transform:rotate(0deg)}
-#v-sager .sek.lukket > :not(h2:first-child){display:none!important}
-#v-sager .sek.lukket{gap:0}
+/* Foldbare afsnit på Sager og i Indstillinger – kun ét åbent ad gangen */
+:is(#v-sager,#indstPanel) .sek > h2:first-child{cursor:pointer;user-select:none;-webkit-user-select:none;min-height:32px}
+:is(#v-sager,#indstPanel) .sek > h2:first-child::after{content:"›";margin-left:auto;font-size:24px;line-height:1;color:var(--sink);transition:transform .15s;transform:rotate(90deg)}
+:is(#v-sager,#indstPanel) .sek.lukket > h2:first-child::after{transform:rotate(0deg)}
+:is(#v-sager,#indstPanel) .sek.lukket > :not(h2:first-child){display:none!important}
+:is(#v-sager,#indstPanel) .sek.lukket{gap:0}
+.sek-sort{background:#EEF3FA;--sline:#CADAF0;--sink:#1F4E85}
+#indstPanel .sek{box-shadow:none}
 .card.foldet > :not(:first-child){display:none!important}
 .card.foldet{gap:0}
 .formboks{background:var(--tbg);border:1px solid var(--tline);border-radius:14px;padding:12px}
@@ -140,7 +142,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.2</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.3</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -328,11 +330,14 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
 <div id="indstPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="indstTitel" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center">
   <div class="card" style="width:100%;max-width:560px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));gap:14px">
     <div style="display:flex;align-items:center;justify-content:space-between"><h2 id="indstTitel" style="margin:0">⚙️ Indstillinger</h2><button type="button" class="btn small" id="indstLuk" style="flex:0 0 auto">Luk</button></div>
+    <div class="card sek sek-sort" id="indstSort">
+    <h2>Sortering</h2>
     <label class="f">Sortér sager efter<select id="indstFelt"><option value="brugt">Senest brugt</option><option value="nr">Sagsnummer</option><option value="adresse">Adresse</option><option value="bf">Boligforening</option><option value="oprettet">Oprettet</option></select></label>
     <div class="f"><span>Rækkefølge</span><div class="row" role="group" aria-label="Rækkefølge"><button type="button" class="btn" id="indstOp">Stigende ↑</button><button type="button" class="btn" id="indstNed">Faldende ↓</button></div></div>
     <div class="muted" style="font-size:13px">Gælder alle lister og rullemenuer med sager i appen. Indstillingen er din egen og følger din Home Assistant-bruger på alle dine enheder.</div>
-    <form id="helDagForm" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line,#ddd);padding-top:14px">
-      <h3 style="margin:0">Hel dag</h3>
+    </div>
+    <form class="card sek sek-dag" id="helDagForm">
+      <h2>Hel dag</h2>
       <p class="muted" style="margin:0;font-size:13px">Hvor mange timer knappen "Hel dag" giver på hver ugedag. Skriv fx 7:45 eller 7,75.</p>
       <div class="dagGrid" id="helDagFelter"></div>
       <div class="row"><button type="button" class="btn" id="helDagStd" style="flex:0 0 auto">Standard</button><button class="btn accent" type="submit">Gem</button></div>
@@ -843,7 +848,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const hoved=el("div",{class:"korthoved"}, el("span",{class:"tag"}, (s?("Sag "+s.nr):"Sag")+(done?" · ✓ Indtastet":"")), el("h2",null, s?s.adresse:"Ukendt sag"),
         done? el("span",{class:"muted",style:"font-size:13px"}, hjemAaben.has(doneId)? "Tryk for at folde sammen" : "Tryk for at se det hele") : null);
       if(done){ hoved.style.cursor="pointer"; hoved.setAttribute("role","button"); hoved.setAttribute("aria-expanded", hjemAaben.has(doneId)?"true":"false");
-        hoved.addEventListener("click",()=>{ hjemAaben.has(doneId)? hjemAaben.delete(doneId) : hjemAaben.add(doneId); renderHjem(); }); }
+        hoved.addEventListener("click",()=>{ if(hjemAaben.has(doneId)) hjemAaben.delete(doneId); else { hjemAaben.clear(); hjemAaben.add(doneId); } renderHjem(); }); }
       cards.push(el("div",{class:"card"+(done && !hjemAaben.has(doneId)?" foldet":""),style:done?"opacity:.75":""},
         hoved,
         el("div",{class:"boks t-timer sum",style:"align-items:center"}, el("span",{class:"bokstitel",style:"margin:0"},"Timer"), el("span",{class:"big"},fmtNum(r.timer))),
@@ -1036,9 +1041,10 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function aabnSek(id, aaben=true){
     const k=$(id); if(!k) return;
     k.classList.toggle("lukket", !aaben);
+    if(aaben && k.parentElement) k.parentElement.querySelectorAll(":scope > .sek").forEach(o=>{ if(o!==k && !o.classList.contains("lukket")){ o.classList.add("lukket"); const oh=o.querySelector(":scope > h2"); if(oh) oh.setAttribute("aria-expanded","false"); } });
     const h=k.querySelector(":scope > h2"); if(h) h.setAttribute("aria-expanded", aaben?"true":"false");
   }
-  document.querySelectorAll("#v-sager .sek").forEach(k=>{
+  document.querySelectorAll("#v-sager .sek, #indstPanel .sek").forEach(k=>{
     const h=k.querySelector(":scope > h2"); if(!h) return;
     k.classList.add("lukket");
     h.setAttribute("role","button"); h.setAttribute("tabindex","0"); h.setAttribute("aria-expanded","false");
