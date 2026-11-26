@@ -35,6 +35,7 @@ label.f{min-width:0}
 .row{display:flex;gap:8px;align-items:center}
 .row > *{flex:1}
 .btn{min-height:48px;border-radius:12px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:15px;padding:0 14px;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
 .btn.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.small{min-height:40px;font-size:14px;padding:0 12px;flex:0 0 auto}
@@ -142,7 +143,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.3</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.4</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -1152,11 +1153,11 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const s=items.get(id); if(!s) return; retSag=id;
     $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||""; visBfForslag();
     $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; $("aftaleSlut").value=s.aftale?(s.aftale.slut||""):"08:00"; visAftaleFelter();
-    $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden");
+    $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden"); visSagKnap();
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
     else $("sagForm").scrollIntoView({behavior:"smooth",block:"start"});
   }
-  function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); visAftaleFelter(); visBfForslag(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); }
+  function slutRetSag(){ skjulSagFindes(); retSag=null; $("sagForm").reset(); visAftaleFelter(); visBfForslag(); $("sagFormTitel").textContent="Ny sag"; $("sagSubmit").textContent="Tilføj sag"; $("sagAnnuller").classList.add("hidden"); visSagKnap(); }
   $("sagAnnuller").addEventListener("click", slutRetSag);
 
   function startRetFast(id){ aabnSek("fastForm");
@@ -1223,7 +1224,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     $("sagFindes").classList.remove("hidden");
   }
   function skjulSagFindes(){ sagFindesId=null; $("sagFindes").classList.add("hidden"); }
-  $("sagNr").addEventListener("input", skjulSagFindes);
+  // Ny sag kan først sendes, når sagsnummeret har mindst 5 cifre (ret af eksisterende sag er ikke låst)
+  const nrCifre=()=>($("sagNr").value.match(/\d/g)||[]).length;
+  let sagGemmer=false;
+  function visSagKnap(){ const b=$("sagSubmit"); if(b) b.disabled = sagGemmer || (!retSag && nrCifre()<5); }
+  $("sagNr").addEventListener("input", ()=>{ skjulSagFindes(); visSagKnap(); });
+  visSagKnap();
   $("sagBf").addEventListener("input", visBfForslag);
   $("sagFindesRet").addEventListener("click", async ()=>{
     const id=sagFindesId; skjulSagFindes(); const s=items.get(id); if(!s) return;
@@ -1247,6 +1253,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     e.preventDefault();
     const nr=$("sagNr").value.trim(), adr=$("sagAdr").value.trim();
     if(!nr||!adr){ toast("Udfyld sagsnummer og adresse"); return; }
+    if(sagGemmer) return;
+    if(!retSag && nrCifre()<5){ toast("Sagsnummeret skal have mindst 5 cifre"); visSagKnap(); return; }
     const findes=sager().filter(s=>s.id!==retSag && s.nr===nr).sort((a,b)=>(a.arkiveret?1:0)-(b.arkiveret?1:0))[0];
     if(findes){ visSagFindes(findes); return; }
     if(retSag){
@@ -1256,8 +1264,11 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const ok=await save(retSag,d,"Ændring gemt"); if(ok){ slutRetSag(); visKalBanner(id0, JSON.stringify(gl.aftale||null)!==JSON.stringify(d.aftale||null)); } return;
     }
     const id=newId("sag");
+    sagGemmer=true; visSagKnap();
     const ok=await save(id,{kind:"sag", nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
-    if(ok){ $("sagForm").reset(); visAftaleFelter(); pendingSel=id; renderSagValg(); visKalBanner(id,true); }
+    sagGemmer=false;
+    if(ok){ $("sagForm").reset(); visAftaleFelter(); visBfForslag(); pendingSel=id; renderSagValg(); visKalBanner(id,true); }
+    visSagKnap();
   });
 
   $("dato").addEventListener("change", ()=>{ renderSagValg(); renderDag(); });
