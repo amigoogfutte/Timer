@@ -145,7 +145,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.5</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.6</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="status" class="note hidden" role="status"></div>
@@ -345,6 +345,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <div class="dagGrid" id="helDagFelter"></div>
       <div class="row"><button type="button" class="btn" id="helDagStd" style="flex:0 0 auto">Standard</button><button class="btn accent" type="submit">Gem</button></div>
     </form>
+    <div class="card sek sek-dag" id="indstBruger">
+      <h2>Bruger</h2>
+      <p style="margin:0">Logget ind som <b id="brugerNavn">–</b></p>
+      <p class="muted" style="margin:0;font-size:13px">Hver Home Assistant-bruger har sine egne sager, timer og materialer. En ny bruger starter med en tom app.</p>
+      <button type="button" class="btn" id="brugerSkift">Log ud / skift bruger</button>
+    </div>
     <div class="card sek sek-del" id="indstDel">
       <h2>Del appen</h2>
       <p class="muted" style="margin:0;font-size:13px">Send et link til JCF timeregistrering. Den, der får det, skal have et login til din Home Assistant for at bruge appen.</p>
@@ -414,6 +420,36 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function rebuild(){ items.clear(); for(const id in db.records){ const r=db.records[id]; if(r && !r.deleted){ const c=Object.assign({},r); delete c.id; delete c.updated; items.set(id,c); } } }
   function markDirty(id){ if(!db.dirty.includes(id)) db.dirty.push(id); }
   rebuild();
+  // Data på enheden hører til én Home Assistant-bruger. Skifter brugeren, gemmes den forriges data
+  // under hans egen nøgle, og den nye bruger får sine egne (eller en tom app første gang).
+  const PR_BRUGER=["tm_lastSync","tm_kal","tm_kal_ok","tm_sort","tm_bf"];
+  let curUid=null, curNavn="";
+  function ejer(){ try{ return localStorage.getItem("tm_owner")||""; }catch(e){ return ""; } }
+  function skiftBruger(uid){
+    const gl=ejer();
+    if(gl===uid) return false;
+    try{
+      if(gl){
+        const gem={db}; PR_BRUGER.forEach(k=>gem[k]=localStorage.getItem(k));
+        localStorage.setItem("tm_u_"+gl, JSON.stringify(gem));
+      } else { localStorage.setItem("tm_owner",uid); return false; } // første gang: data på enheden er denne brugers
+      const raw=localStorage.getItem("tm_u_"+uid); const o=raw? JSON.parse(raw) : null;
+      db = (o&&o.db&&o.db.records)? {records:o.db.records, dirty:Array.isArray(o.db.dirty)?o.db.dirty:[]} : {records:{},dirty:[]};
+      PR_BRUGER.forEach(k=>{ const v=o? o[k] : null; v==null? localStorage.removeItem(k) : localStorage.setItem(k,v); });
+      localStorage.removeItem("tm_u_"+uid);
+      localStorage.setItem("tm_owner",uid);
+    }catch(e){}
+    try{ bfFilter=localStorage.getItem("tm_bf")||""; }catch(e){ bfFilter=""; }
+    syncState.last=+(localStorage.getItem("tm_lastSync")||0);
+    persist(); rebuild(); renderAll();
+    return true;
+  }
+  async function hvemErJeg(){
+    const r=await api("mig"); if(!r.ok) throw new Error("mig "+r.status);
+    const j=await r.json(); curUid=j.id; curNavn=j.navn||"";
+    const n=document.getElementById("brugerNavn"); if(n) n.textContent=curNavn||"ukendt";
+    if(skiftBruger(curUid)) toast("Logget ind som "+(curNavn||"ny bruger"));
+  }
   store = {
     put: async (id,data)=>{ const prev=db.records[id]; const now=Math.max(Date.now(), prev?(prev.updated||0)+1:0); db.records[id]=Object.assign({},data,{id,updated:now}); markDirty(id); persist(); rebuild(); renderAll(); scheduleSync(1500); },
     del: async (id)=>{ const prev=db.records[id]; const now=Math.max(Date.now(), prev?(prev.updated||0)+1:0); db.records[id]={id,updated:now,deleted:true,kind:prev?prev.kind:""}; markDirty(id); persist(); rebuild(); renderAll(); scheduleSync(1500); }
@@ -493,6 +529,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(!navigator.onLine){ setSync("offline"); return; }
     syncing=true; syncStart=Date.now(); const minTur=++syncTur; setSync("busy");
     try{
+      await hvemErJeg();
       const sent={}; const poster=[];
       for(const id of db.dirty){ const r=db.records[id]; if(r){ sent[id]=r.updated; poster.push(r); } }
       const res=await api("sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({poster})});
@@ -802,6 +839,12 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   }
   $("tandhjul").addEventListener("click",()=>{ visIndst(); if(typeof renderHelDag==="function") renderHelDag(); $("indstPanel").classList.remove("hidden"); });
   $("indstLuk").addEventListener("click",()=>$("indstPanel").classList.add("hidden"));
+  $("brugerSkift").addEventListener("click",()=>{
+    if(inFrame){ toast("Skift bruger i Home Assistant (din profil → Log ud)"); return; }
+    if(db.dirty.length && !confirm(db.dirty.length+" ændring(er) er ikke sendt endnu. De gemmes på telefonen og sendes, når du logger ind igen. Log ud alligevel?")) return;
+    authSet(null); try{ localStorage.removeItem("hassTokens"); }catch(e){}
+    startLogin();
+  });
   // ---- Del appen (SMS / mail / delemenu / kopiér) ----
   (function(){
     const EKSTERN="https://zdpd1tjumqvehlvyd51sfskcwkhbz9gx.ui.nabu.casa/timer-app/index.html";
