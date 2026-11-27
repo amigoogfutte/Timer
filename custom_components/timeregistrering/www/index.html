@@ -144,6 +144,7 @@ details.sagdag .list{padding:0 0 8px 18px}
 #soegRes button:active{background:#F2F4F1}
 #soegRes .s1{display:block;font-weight:600;overflow-wrap:anywhere}
 #soegRes .s2{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+#soegRes button.opret{background:#EEF6F2;color:#17583F;border:1px solid #CFE6DA;border-radius:12px;margin:6px 10px 8px;width:calc(100% - 20px);font-weight:700;text-align:center}
 #soegRes .tom{padding:14px;color:var(--muted)}
 #soegRes mark{background:#FCE7B2;color:inherit;border-radius:3px}
 #syncBar.ok{background:#E5F2EC;color:#17583F}
@@ -161,7 +162,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.8</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.9</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="soegBoks"><input type="search" id="soeg" placeholder="Søg på alt – sager, adresser, materialer, noter …" autocomplete="off" autocorrect="off" enterkeyhint="search" aria-label="Søg"><button type="button" id="soegRyd" class="hidden" aria-label="Ryd søgning">×</button><div id="soegRes" class="hidden" role="listbox"></div></div>
@@ -1408,6 +1409,18 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const ord=norm(q).split(/\s+/).filter(Boolean);
       const passer=h=>{ h=norm(h); return ord.every(o=>h.includes(o)); };
       const out=[]; let antal=0;
+      // Et sagsnummer (mindst 5 cifre), der ikke findes → knap til at oprette sagen
+      const nrQ=q.replace(/\s+/g,"");
+      if(/^\d{5,}$/.test(nrQ) && !sager().some(s=>String(s.nr||"").replace(/\s+/g,"")===nrQ)){
+        const b=document.createElement("button"); b.type="button"; b.className="opret"; b.textContent="＋ Opret sag "+nrQ;
+        b.addEventListener("click",()=>gaa(()=>{
+          const fyld=()=>{ if(typeof slutRetSag==="function" && retSag) slutRetSag(); aabnSek("sagForm",true); $("sagNr").value=nrQ; $("sagNr").dispatchEvent(new Event("input")); inp.value=""; ryd.classList.add("hidden");
+            setTimeout(()=>{ $("sagForm").scrollIntoView({behavior:"smooth",block:"start"}); $("sagAdr").focus({preventScroll:true}); },80); };
+          if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(fyld,60); } else fyld();
+        }));
+        out.push(Object.assign(document.createElement("div"),{className:"sgrp",textContent:"Sag "+nrQ+" findes ikke"}), b);
+        antal++;
+      }
       const grp=(titel,liste,max)=>{ if(!liste.length) return; antal+=liste.length; out.push(Object.assign(document.createElement("div"),{className:"sgrp",textContent:titel+" ("+liste.length+")"})); out.push(...liste.slice(0,max)); };
       // Sager
       const ss=sorterSager(sager()).filter(s=>passer([s.nr,s.adresse,s.bf,s.besk,s.aftale&&s.aftale.dato?("aftale "+s.aftale.dato+" "+aftaleTxt(s.aftale)):"",s.arkiveret?"afsluttet":""].join(" ")));
