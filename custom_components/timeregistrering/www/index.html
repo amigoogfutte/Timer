@@ -50,6 +50,11 @@ label.f{min-width:0}
 #f-timer.ryst{animation:ryst .4s}
 @keyframes ryst{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 #timerAdv{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#FDECEC;color:#8A1F1B;font-weight:600;font-size:14px;text-align:center}
+.sblok{display:flex;flex-direction:column;gap:1px;min-width:0;overflow-wrap:anywhere;white-space:normal}
+.sblok .so{font-weight:700;font-size:16px;color:var(--ink)}
+.sblok .sn{font-size:13px;font-weight:600;color:var(--accent)}
+.sblok .sa{font-size:15px;color:var(--ink)}
+.sblok .sb{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .stepper .btn{width:60px;height:60px;font-size:26px;flex:0 0 auto}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid var(--line);background:#fff;font-weight:600;cursor:pointer}
@@ -162,7 +167,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.3.0</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.3.1</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="soegBoks"><input type="search" id="soeg" placeholder="Søg på alt – sager, adresser, materialer, noter …" autocomplete="off" autocorrect="off" enterkeyhint="search" aria-label="Søg"><button type="button" id="soegRyd" class="hidden" aria-label="Ryd søgning">×</button><div id="soegRes" class="hidden" role="listbox"></div></div>
@@ -181,7 +186,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
         <button type="button" id="sagKort" class="btn" style="text-align:left;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;min-height:56px;color:var(--ink)"><span id="sagKortTxt" style="overflow-wrap:anywhere;white-space:normal"></span><span aria-hidden="true" style="color:var(--muted)">▾</span></button>
         <div id="sagVaelger" class="hidden list" style="border:1px solid var(--line);border-radius:12px;padding:4px 10px;max-height:360px;overflow:auto;background:#fff"></div>
       </div>
-      <div id="sagInfo" class="hidden" style="background:var(--bg);border:1px solid var(--soft);border-radius:12px;padding:10px 12px"><div class="muted" style="font-size:12px;font-weight:600;margin-bottom:4px">På sagen står</div><div id="sagInfoTxt" style="font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:5.6em;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain"></div><div id="sagInfoMere" class="hidden" style="font-size:13px;font-weight:700;color:var(--accent);margin-top:4px">Mere tekst – scroll ned i feltet ↓</div></div>
+      <div id="sagInfo" class="hidden" style="background:var(--bg);border:1px solid var(--soft);border-radius:12px;padding:10px 12px"><div class="muted" style="font-size:12px;font-weight:600;margin-bottom:4px">Arbejdsbeskrivelse</div><div id="sagInfoTxt" style="font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:5.6em;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain"></div><div id="sagInfoMere" class="hidden" style="font-size:13px;font-weight:700;color:var(--accent);margin-top:4px">Mere tekst – scroll ned i feltet ↓</div></div>
       <div id="dagensAftaler" class="hidden" style="background:#E5F2EC;color:#17583F;border-radius:12px;padding:8px 12px"></div>
       <div id="ingenSager" class="note hidden">Du har ingen sager endnu. Opret en under <a href="#sager">Sager</a>.</div>
       <div class="seg" role="group" aria-label="Hvad vil du notere">
@@ -632,20 +637,30 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   $("sagInfoTxt").addEventListener("scroll", markerMere, {passive:true});
   function visSagKort(){
     const sel=$("sagValg"); const o=sel.selectedOptions[0];
-    $("sagKortTxt").textContent = o? o.textContent : "Vælg sag";
+    const vs=o? sagById(o.value) : null;
+    $("sagKortTxt").replaceChildren(vs? sagBlok(vs, o.dataset.kl, false) : document.createTextNode("Vælg sag"));
     const box=$("sagVaelger");
     box.replaceChildren(...[...sel.options].map(op=>{
-      const b=el("button",{type:"button",class:"item",style:"width:100%;text-align:left;background:"+(op.value===sel.value?"var(--soft)":"transparent")+";border:none;border-top:1px solid var(--soft);padding:10px 4px;font:inherit;font-size:15px;color:var(--ink);cursor:pointer;white-space:normal;overflow-wrap:anywhere;min-height:44px"}, op.textContent);
+      const os=sagById(op.value);
+      const b=el("button",{type:"button",class:"item",style:"width:100%;text-align:left;background:"+(op.value===sel.value?"var(--soft)":"transparent")+";border:none;border-top:1px solid var(--soft);padding:10px 6px;font:inherit;font-size:15px;color:var(--ink);cursor:pointer;white-space:normal;overflow-wrap:anywhere;min-height:44px;display:block"}, os? sagBlok(os, op.dataset.kl, true) : op.textContent);
       b.addEventListener("click",()=>{ sel.value=op.value; box.classList.add("hidden"); sel.dispatchEvent(new Event("change")); visSagKort(); });
       return b; }));
+  }
+  // Sag vist pænt: overskrift, sagsnummer, adresse (og evt. arbejdsbeskrivelse)
+  function sagBlok(s, kl, medBesk){
+    const nrTxt=(kl? "Kl. "+kl+" · ":"")+(s.bf? s.bf+" · ":"")+"Sag "+s.nr;
+    return el("span",{class:"sblok"},
+      s.overskrift? el("span",{class:"so"},s.overskrift) : null,
+      el("span",{class:"sn"},nrTxt),
+      el("span",{class:"sa",style:s.overskrift?"":"font-weight:700"},s.adresse||""),
+      medBesk && s.besk? el("span",{class:"sb"},s.besk) : null);
   }
   function visSagInfo(){
     const s=sagById($("sagValg").value), box=$("sagInfo");
     if(!s){ box.classList.add("hidden"); return; }
     const linjer=[];
     if(s.aftale && s.aftale.dato) linjer.push("Aftale "+aftaleTxt(s.aftale)+(s.aftale.fuldfort?" (fuldført)":""));
-    if(s.overskrift) linjer.push(s.overskrift);
-    linjer.push(s.besk? s.besk : (s.overskrift? "" : "Ingen beskrivelse"));
+    linjer.push(s.besk? s.besk : "Ingen arbejdsbeskrivelse");
     $("sagInfoTxt").textContent=linjer.filter(Boolean).join("\n"); $("sagInfoTxt").scrollTop=0;
     box.classList.remove("hidden");
     requestAnimationFrame(markerMere);
@@ -657,7 +672,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const list=activeSager().filter(s=>bfMatch(s) || harAft(s));
     const dagens=list.filter(harAft).sort((a,b)=>(a.aftale.tid||"").localeCompare(b.aftale.tid||""));
     const resten=list.filter(s=>!harAft(s));
-    sel.replaceChildren(...[...dagens,...resten].map(s=>el("option",{value:s.id}, (harAft(s)? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+s.nr+" · "+s.adresse)));
+    sel.replaceChildren(...[...dagens,...resten].map(s=>el("option",harAft(s)? {value:s.id,"data-kl":tidTxt(s.aftale)} : {value:s.id}, (harAft(s)? "Kl. "+tidTxt(s.aftale)+" · ":"")+(s.bf? s.bf+" · ":"")+s.nr+" · "+s.adresse)));
     const retSagId = retPost && items.get(retPost) ? items.get(retPost).sagId : null;
     if(retSagId){
       if(![...sel.options].some(o=>o.value===retSagId)){ const rs=sagById(retSagId); sel.append(el("option",{value:retSagId}, rs? (rs.bf? rs.bf+" · ":"")+rs.nr+" · "+rs.adresse : "Ukendt sag")); }
