@@ -321,8 +321,9 @@ class KalenderFeedView(HomeAssistantView):
             ]
             if r.get("adresse"):
                 linjer.append(f"LOCATION:{_ics_tekst(str(r['adresse']))}")
-            if r.get("besk"):
-                linjer.append(f"DESCRIPTION:{_ics_tekst(str(r['besk']))}")
+            besk = "\n".join(str(x) for x in (r.get("overskrift"), r.get("besk")) if x)
+            if besk:
+                linjer.append(f"DESCRIPTION:{_ics_tekst(besk)}")
             if r.get("arkiveret"):
                 linjer.append("STATUS:CONFIRMED")
             linjer += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Aftale", "TRIGGER:-PT30M", "END:VALARM", "END:VEVENT"]

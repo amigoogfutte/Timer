@@ -162,7 +162,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       <path d="M256 60 A196 196 0 0 1 452 256" fill="none" stroke="#F2A65A" stroke-width="22" stroke-linecap="round"/>
       <text x="256" y="312" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="170" fill="#fff">JCF</text>
     </svg>
-    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.2.9</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
+    <div class="brandtxt"><span class="b1">JCF</span> <span class="b2">timeregistrering</span></div><span id="appVersion" style="margin-left:auto;font-size:12px;color:var(--muted)">v1.3.0</span><button type="button" id="tandhjul" aria-label="Indstillinger" style="flex:0 0 auto;width:44px;height:44px;border:none;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0">⚙️</button>
   </div>
   <button type="button" id="syncBar" class="hidden"></button>
   <div id="soegBoks"><input type="search" id="soeg" placeholder="Søg på alt – sager, adresser, materialer, noter …" autocomplete="off" autocorrect="off" enterkeyhint="search" aria-label="Søg"><button type="button" id="soegRyd" class="hidden" aria-label="Ryd søgning">×</button><div id="soegRes" class="hidden" role="listbox"></div></div>
@@ -260,6 +260,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     <form class="card sek sek-ny" id="sagForm">
       <h2 id="sagFormTitel">Ny sag</h2>
       <label class="f">Sagsnummer<input type="text" id="sagNr" inputmode="numeric" placeholder="Fx 15256" autocomplete="off" required></label>
+      <label class="f">Overskrift<input type="text" id="sagOverskrift" placeholder="Fx Udskiftning af vinduer" autocomplete="off"></label>
       <label class="f">Adresse<input type="text" id="sagAdr" placeholder="Fx Munkemaen 100 A" autocomplete="off" required></label>
       <label class="f">Boligforening – initialer (valgfrit)<input type="text" id="sagBf" list="bfListe" placeholder="Fx OB" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
       <datalist id="bfListe"></datalist>
@@ -643,8 +644,9 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     if(!s){ box.classList.add("hidden"); return; }
     const linjer=[];
     if(s.aftale && s.aftale.dato) linjer.push("Aftale "+aftaleTxt(s.aftale)+(s.aftale.fuldfort?" (fuldført)":""));
-    linjer.push(s.besk? s.besk : "Ingen beskrivelse");
-    $("sagInfoTxt").textContent=linjer.join("\n"); $("sagInfoTxt").scrollTop=0;
+    if(s.overskrift) linjer.push(s.overskrift);
+    linjer.push(s.besk? s.besk : (s.overskrift? "" : "Ingen beskrivelse"));
+    $("sagInfoTxt").textContent=linjer.filter(Boolean).join("\n"); $("sagInfoTxt").scrollTop=0;
     box.classList.remove("hidden");
     requestAnimationFrame(markerMere);
   }
@@ -890,7 +892,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   function renderSager(){
     const act=activeSager().filter(bfMatch), ark=sorterSager(sager().filter(s=>s.arkiveret && bfMatch(s)));
     const mk=(s,archived)=>el("div",{class:"item"},
-      dobbeltTryk(el("div",{class:"txt",style:"flex:1;cursor:pointer;user-select:none;-webkit-user-select:none"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), el("span",{style:"font-weight:600"},s.adresse),
+      dobbeltTryk(el("div",{class:"txt",style:"flex:1;cursor:pointer;user-select:none;-webkit-user-select:none"}, el("span",{class:"tag"},(s.bf? s.bf+" · ":"")+"Sag "+s.nr), s.overskrift? el("span",{style:"font-weight:700"},s.overskrift) : null, el("span",{style:s.overskrift?"":"font-weight:600"},s.adresse),
         s.aftale && s.aftale.dato ? el("span",{class:"muted"},"Aftale "+aftaleTxt(s.aftale)) : null,
         s.besk && visBesk.has(s.id) ? el("span",{class:"muted",style:"white-space:pre-wrap"},s.besk) : null), s),
       el("div",{class:"row",style:"flex:0 0 auto"},
@@ -906,7 +908,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const q=$("sagSoeg").value.trim().toLowerCase();
     const box=$("sagSoegListe");
     if(!q){ box.replaceChildren(); return; }
-    const hits=sager().map(x=>({x,sc:soegScore([x.nr,x.adresse,x.bf,x.besk],q)})).filter(r=>r.sc>0)
+    const hits=sager().map(x=>({x,sc:soegScore([x.nr,x.overskrift,x.adresse,x.bf,x.besk],q)})).filter(r=>r.sc>0)
       .sort((a,b)=>b.sc-a.sc || (a.x.arkiveret?1:0)-(b.x.arkiveret?1:0) || (b.x.oprettet||0)-(a.x.oprettet||0)).map(r=>r.x);
     box.replaceChildren(el("div",{class:"muted"}, hits.length? hits.length+(hits.length===1?" sag fundet":" sager fundet") : "Ingen sager matcher."),
       ...hits.map(s=>{ const r=mk(s,!!s.arkiveret); if(s.arkiveret){ const t=r.querySelector(".tag"); t.textContent+=" · Afsluttet"; t.style.color="#6E520C"; } return r; }));
@@ -935,7 +937,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       const pre=el("pre",{class:"copy"},txt);
       const cb=el("input",{type:"checkbox"}); cb.checked=done;
       cb.addEventListener("change",()=>{ hjemAaben.delete(doneId); if(cb.checked) save(doneId,{kind:"done",dato,sagId:sid,oprettet:Date.now()},"Markeret som indtastet"); else remove(doneId,"Markering fjernet"); });
-      const hoved=el("div",{class:"korthoved"}, el("span",{class:"tag"}, (s?("Sag "+s.nr):"Sag")+(done?" · ✓ Indtastet":"")), el("h2",null, s?s.adresse:"Ukendt sag"),
+      const hoved=el("div",{class:"korthoved"}, el("span",{class:"tag"}, (s?("Sag "+s.nr):"Sag")+(done?" · ✓ Indtastet":"")), el("h2",null, s?s.adresse:"Ukendt sag"), s&&s.overskrift? el("div",{style:"font-weight:600"},s.overskrift) : null,
         done? el("span",{class:"muted",style:"font-size:13px"}, hjemAaben.has(doneId)? "Tryk for at folde sammen" : "Tryk for at se det hele") : null);
       if(done){ hoved.style.cursor="pointer"; hoved.setAttribute("role","button"); hoved.setAttribute("aria-expanded", hjemAaben.has(doneId)?"true":"false");
         hoved.addEventListener("click",()=>{ if(hjemAaben.has(doneId)) hjemAaben.delete(doneId); else { hjemAaben.clear(); hjemAaben.add(doneId); } renderHjem(); }); }
@@ -1090,7 +1092,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const start=a.dato.replace(/-/g,"")+"T"+((a.tid||"07:00").replace(":",""))+"00";
     const min=t=>{ const m=/^(\d{1,2}):(\d{2})/.exec(t||""); return m? (+m[1])*60+(+m[2]) : null; };
     let varighed=60; const a0=min(a.tid), a1=min(a.slut); if(a0!=null && a1!=null && a1>a0) varighed=a1-a0;
-    const json=JSON.stringify({d:String(varighed), t:(s.bf? s.bf+" ":"")+"Sag "+s.nr+" – "+s.adresse, s:start, l:s.adresse||"", n:s.besk||"", u:s.id});
+    const json=JSON.stringify({d:String(varighed), t:(s.bf? s.bf+" ":"")+"Sag "+s.nr+" – "+s.adresse, s:start, l:s.adresse||"", n:[s.overskrift,s.besk].filter(Boolean).join("\n"), u:s.id});
     const b64=btoa(unescape(encodeURIComponent(json))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
     return "/api/timeregistrering/ics?d="+b64;
   }
@@ -1241,7 +1243,7 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
   const komma=v=>String(v==null?"":v).replace(".",",");
   function startRetSag(id){ aabnSek("sagForm");
     const s=items.get(id); if(!s) return; retSag=id;
-    $("sagNr").value=s.nr||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||""; visBfForslag();
+    $("sagNr").value=s.nr||""; $("sagOverskrift").value=s.overskrift||""; $("sagAdr").value=s.adresse||""; $("sagBesk").value=s.besk||""; $("sagBf").value=s.bf||""; visBfForslag();
     $("sagAftale").checked=!!(s.aftale&&s.aftale.dato); $("aftaleDato").value=s.aftale?s.aftale.dato:""; $("aftaleTid").value=s.aftale?(s.aftale.tid||"07:00"):"07:00"; $("aftaleSlut").value=s.aftale?(s.aftale.slut||""):"08:00"; visAftaleFelter();
     $("sagFormTitel").textContent="Ret sag "+(s.nr||""); $("sagSubmit").textContent="Gem ændringer"; $("sagAnnuller").classList.remove("hidden"); visSagKnap();
     if(location.hash!=="#sager"){ location.hash="sager"; setTimeout(()=>$("sagForm").scrollIntoView({block:"start"}),50); }
@@ -1349,14 +1351,14 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
     const findes=sager().filter(s=>s.id!==retSag && s.nr===nr).sort((a,b)=>(a.arkiveret?1:0)-(b.arkiveret?1:0))[0];
     if(findes){ visSagFindes(findes); return; }
     if(retSag){
-      const d=Object.assign({},items.get(retSag),{nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal()});
+      const d=Object.assign({},items.get(retSag),{nr, overskrift:$("sagOverskrift").value.trim(), adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal()});
       const gl=items.get(retSag)||{}; const id0=retSag;
       if(gl.aftale && d.aftale && gl.aftale.fuldfort && gl.aftale.dato===d.aftale.dato && gl.aftale.tid===d.aftale.tid) d.aftale.fuldfort=true;
       const ok=await save(retSag,d,"Ændring gemt"); if(ok){ slutRetSag(); visKalBanner(id0, JSON.stringify(gl.aftale||null)!==JSON.stringify(d.aftale||null)); } return;
     }
     const id=newId("sag");
     sagGemmer=true; visSagKnap();
-    const ok=await save(id,{kind:"sag", nr, adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
+    const ok=await save(id,{kind:"sag", nr, overskrift:$("sagOverskrift").value.trim(), adresse:adr, besk:$("sagBesk").value.trim(), bf:bfVal(), aftale:aftaleVal(), arkiveret:false, oprettet:Date.now()},"Sag oprettet");
     sagGemmer=false;
     if(ok){ $("sagForm").reset(); visAftaleFelter(); visBfForslag(); pendingSel=id; renderSagValg(); visKalBanner(id,true); }
     visSagKnap();
@@ -1423,8 +1425,8 @@ pre.copy{white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10
       }
       const grp=(titel,liste,max)=>{ if(!liste.length) return; antal+=liste.length; out.push(Object.assign(document.createElement("div"),{className:"sgrp",textContent:titel+" ("+liste.length+")"})); out.push(...liste.slice(0,max)); };
       // Sager
-      const ss=sorterSager(sager()).filter(s=>passer([s.nr,s.adresse,s.bf,s.besk,s.aftale&&s.aftale.dato?("aftale "+s.aftale.dato+" "+aftaleTxt(s.aftale)):"",s.arkiveret?"afsluttet":""].join(" ")));
-      grp("Sager", ss.map(s=>knap(sagNavn(s), [s.arkiveret?"Afsluttet":"", s.aftale&&s.aftale.dato&&!s.aftale.fuldfort?"Aftale "+aftaleTxt(s.aftale):"", s.besk?s.besk.split("\n")[0].slice(0,90):""].filter(Boolean).join(" · "), ord, ()=>aabnSag(s))), 15);
+      const ss=sorterSager(sager()).filter(s=>passer([s.nr,s.overskrift,s.adresse,s.bf,s.besk,s.aftale&&s.aftale.dato?("aftale "+s.aftale.dato+" "+aftaleTxt(s.aftale)):"",s.arkiveret?"afsluttet":""].join(" ")));
+      grp("Sager", ss.map(s=>knap(sagNavn(s), [s.arkiveret?"Afsluttet":"", s.overskrift||"", s.aftale&&s.aftale.dato&&!s.aftale.fuldfort?"Aftale "+aftaleTxt(s.aftale):"", s.besk?s.besk.split("\n")[0].slice(0,90):""].filter(Boolean).join(" · "), ord, ()=>aabnSag(s))), 15);
       // Noteringer
       const ps=all("post").filter(p=>{ const s=sagById(p.sagId); return passer([postLine(p), typeNavn[p.type]||"", sagNavn(s), p.dato, fmtDato(p.dato)].join(" ")); })
         .sort((a,b)=>(b.dato||"").localeCompare(a.dato||"")||(b.oprettet||0)-(a.oprettet||0));
